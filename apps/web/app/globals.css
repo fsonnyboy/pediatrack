@@ -1,0 +1,83 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --primary: 214 76% 37%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 214 32% 91%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 214 32% 95%;
+    --muted-foreground: 215 20% 45%;
+
+    --accent: 173 100% 33%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 32% 88%;
+    --input: 214 32% 88%;
+    --ring: 214 76% 37%;
+
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    --background: 217 40% 10%;
+    --foreground: 213 100% 95%;
+
+    --card: 216 38% 13%;
+    --card-foreground: 213 100% 95%;
+
+    --primary: 214 76% 60%;
+    --primary-foreground: 217 40% 10%;
+
+    --secondary: 216 33% 20%;
+    --secondary-foreground: 213 100% 95%;
+
+    --muted: 216 33% 18%;
+    --muted-foreground: 215 20% 65%;
+
+    --accent: 173 100% 40%;
+    --accent-foreground: 217 40% 10%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 216 30% 25%;
+    --input: 216 30% 25%;
+    --ring: 214 76% 60%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+  }
+
+  /* Digits in tables and stat tiles line up */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+}

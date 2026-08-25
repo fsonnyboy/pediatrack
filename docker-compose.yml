@@ -1,0 +1,30 @@
+# Local development database for PediTrack.
+#
+#   docker compose up -d      start
+#   docker compose down       stop
+#   docker compose down -v    stop and DELETE all data
+#
+# Postgres is the only service the app needs. Rate limiting runs in-memory,
+# and no mailer is wired up yet, so there is no Redis or SMTP container here.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: peditrack-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: peditrack
+      POSTGRES_PASSWORD: peditrack_dev
+      POSTGRES_DB: peditrack
+    ports:
+      - '5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U peditrack -d peditrack']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:

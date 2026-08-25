@@ -1,0 +1,429 @@
+// ═══════════════════════════════════════════════════════════
+//  PediTrack — Pediatric Clinic Management Platform
+//  Database Schema (PostgreSQL + Prisma)
+// ═══════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────
+//  ENUMS
+// ─────────────────────────────────────────────────────────
+
+enum UserRole {
+  ADMIN
+  DOCTOR
+  NURSE
+  RECEPTIONIST
+  PARENT // reserved for the upcoming mobile parents portal
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+enum AppointmentType {
+  CHECKUP
+  FOLLOW_UP
+  VACCINATION
+  SICK_VISIT
+  CONSULTATION
+  EMERGENCY
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum PrescriptionStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum BloodType {
+  A_POSITIVE
+  A_NEGATIVE
+  B_POSITIVE
+  B_NEGATIVE
+  AB_POSITIVE
+  AB_NEGATIVE
+  O_POSITIVE
+  O_NEGATIVE
+  UNKNOWN
+}
+
+// ─────────────────────────────────────────────────────────
+//  USERS — clinic staff (and future parent accounts)
+// ─────────────────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(RECEPTIONIST)
+
+  firstName String  @map("first_name")
+  lastName  String  @map("last_name")
+  phone     String?
+  avatarUrl String? @map("avatar_url")
+
+  // Doctor-specific
+  licenseNumber String? @map("license_number")
+  specialty     String?
+
+  isActive    Boolean   @default(true) @map("is_active")
+  lastLoginAt DateTime? @map("last_login_at")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  appointmentsAsDoctor Appointment[]        @relation("DoctorAppointments")
+  vaccinationsGiven    VaccinationRecord[]
+  prescriptionsIssued  Prescription[]
+  medicalNotes         MedicalNote[]
+  vitalSignsRecorded   VitalSign[]
+  auditLogs            AuditLog[]
+
+  @@index([email])
+  @@index([role, isActive])
+  @@map("users")
+}
+
+// ─────────────────────────────────────────────────────────
+//  PATIENTS — the children
+// ─────────────────────────────────────────────────────────
+
+model Patient {
+  id  String @id @default(cuid())
+  mrn String @unique @map("mrn") // Medical Record Number, e.g. PT-2026-00001
+
+  firstName   String    @map("first_name")
+  lastName    String    @map("last_name")
+  middleName  String?   @map("middle_name")
+  dateOfBirth DateTime  @map("date_of_birth")
+  gender      Gender
+  bloodType   BloodType @default(UNKNOWN) @map("blood_type")
+
+  // Birth details — important in pediatrics
+  birthWeightKg   Float? @map("birth_weight_kg")
+  birthHeightCm   Float? @map("birth_height_cm")
+  gestationalAge  Int?   @map("gestational_age_weeks")
+
+  allergies       String[] @default([])
+  chronicConditions String[] @default([]) @map("chronic_conditions")
+  notes           String?
+
+  photoUrl String? @map("photo_url")
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  // Relations
+  guardians          Guardian[]
+  appointments       Appointment[]
+  vaccinationRecords VaccinationRecord[]
+  prescriptions      Prescription[]
+  medicalNotes       MedicalNote[]
+  vitalSigns         VitalSign[]
+
+  @@index([lastName, firstName])
+  @@index([mrn])
+  @@index([dateOfBirth])
+  @@index([isActive, deletedAt])
+  @@map("patients")
+}
+
+// ─────────────────────────────────────────────────────────
+//  GUARDIANS — parents / caregivers
+// ─────────────────────────────────────────────────────────
+
+model Guardian {
+  id        String @id @default(cuid())
+  patientId String @map("patient_id")
+
+  firstName    String  @map("first_name")
+  lastName     String  @map("last_name")
+  relationship String // Mother, Father, Grandparent, Legal Guardian...
+  phone        String
+  email        String?
+  address      String?
+  occupation   String?
+
+  isPrimary          Boolean @default(false) @map("is_primary")
+  isEmergencyContact Boolean @default(false) @map("is_emergency_contact")
+
+  // Link to a future PARENT user account for the mobile app
+  userId String? @map("user_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([phone])
+  @@index([userId])
+  @@map("guardians")
+}
+
+// ─────────────────────────────────────────────────────────
+//  APPOINTMENTS — bookings & check-ups
+// ─────────────────────────────────────────────────────────
+
+model Appointment {
+  id        String @id @default(cuid())
+  patientId String @map("patient_id")
+  doctorId  String @map("doctor_id")
+
+  scheduledAt     DateTime          @map("scheduled_at")
+  durationMinutes Int               @default(30) @map("duration_minutes")
+  type            AppointmentType   @default(CHECKUP)
+  status          AppointmentStatus @default(PENDING)
+
+  chiefComplaint String? @map("chief_complaint")
+  diagnosis      String?
+  reasonForVisit String? @map("reason_for_visit")
+
+  checkedInAt DateTime? @map("checked_in_at")
+  startedAt   DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+
+  cancelledAt        DateTime? @map("cancelled_at")
+  cancellationReason String?   @map("cancellation_reason")
+
+  reminderSentAt DateTime? @map("reminder_sent_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  patient       Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor        User                @relation("DoctorAppointments", fields: [doctorId], references: [id])
+  vitalSign     VitalSign?
+  prescriptions Prescription[]
+  medicalNotes  MedicalNote[]
+  vaccinations  VaccinationRecord[]
+
+  @@index([patientId, scheduledAt])
+  @@index([doctorId, scheduledAt])
+  @@index([scheduledAt, status])
+  @@index([status])
+  @@map("appointments")
+}
+
+// ─────────────────────────────────────────────────────────
+//  VITAL SIGNS — recorded per visit
+// ─────────────────────────────────────────────────────────
+
+model VitalSign {
+  id            String @id @default(cuid())
+  appointmentId String @unique @map("appointment_id")
+  patientId     String @map("patient_id")
+  recordedById  String @map("recorded_by_id")
+
+  weightKg          Float? @map("weight_kg")
+  heightCm          Float? @map("height_cm")
+  headCircumference Float? @map("head_circumference_cm") // key pediatric metric
+  temperatureC      Float? @map("temperature_c")
+  heartRate         Int?   @map("heart_rate_bpm")
+  respiratoryRate   Int?   @map("respiratory_rate")
+  oxygenSaturation  Float? @map("oxygen_saturation")
+  bloodPressureSys  Int?   @map("blood_pressure_systolic")
+  bloodPressureDia  Int?   @map("blood_pressure_diastolic")
+
+  bmi Float?
+
+  recordedAt DateTime @default(now()) @map("recorded_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  appointment Appointment @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  patient     Patient     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  recordedBy  User        @relation(fields: [recordedById], references: [id])
+
+  @@index([patientId, recordedAt])
+  @@map("vital_signs")
+}
+
+// ─────────────────────────────────────────────────────────
+//  VACCINES — reference catalogue
+// ─────────────────────────────────────────────────────────
+
+model Vaccine {
+  id   String @id @default(cuid())
+  code String @unique // BCG, HEPB, DTAP, MMR, IPV...
+  name String
+  description String?
+  manufacturer String?
+
+  totalDoses          Int  @default(1) @map("total_doses")
+  recommendedAgeMonths Int? @map("recommended_age_months")
+  intervalDays        Int? @map("interval_days") // days until next dose
+
+  isActive Boolean @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  records VaccinationRecord[]
+
+  @@index([code])
+  @@map("vaccines")
+}
+
+// ─────────────────────────────────────────────────────────
+//  VACCINATION RECORDS — administered doses
+// ─────────────────────────────────────────────────────────
+
+model VaccinationRecord {
+  id             String  @id @default(cuid())
+  patientId      String  @map("patient_id")
+  vaccineId      String  @map("vaccine_id")
+  administeredById String @map("administered_by_id")
+  appointmentId  String? @map("appointment_id")
+
+  doseNumber     Int      @default(1) @map("dose_number")
+  administeredAt DateTime @map("administered_at")
+  batchNumber    String?  @map("batch_number")
+  expiryDate     DateTime? @map("expiry_date")
+  site           String? // Left deltoid, Right thigh...
+  route          String? // IM, SC, Oral
+
+  nextDueDate DateTime? @map("next_due_date")
+
+  adverseReaction String? @map("adverse_reaction")
+  notes           String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  patient        Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  vaccine        Vaccine      @relation(fields: [vaccineId], references: [id])
+  administeredBy User         @relation(fields: [administeredById], references: [id])
+  appointment    Appointment? @relation(fields: [appointmentId], references: [id])
+
+  @@unique([patientId, vaccineId, doseNumber])
+  @@index([patientId])
+  @@index([nextDueDate])
+  @@index([administeredAt])
+  @@map("vaccination_records")
+}
+
+// ─────────────────────────────────────────────────────────
+//  PRESCRIPTIONS — medicines prescribed
+// ─────────────────────────────────────────────────────────
+
+model Prescription {
+  id            String  @id @default(cuid())
+  patientId     String  @map("patient_id")
+  doctorId      String  @map("doctor_id")
+  appointmentId String? @map("appointment_id")
+
+  status PrescriptionStatus @default(ACTIVE)
+  notes  String?
+
+  issuedAt DateTime  @default(now()) @map("issued_at")
+  validUntil DateTime? @map("valid_until")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  patient     Patient            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor      User               @relation(fields: [doctorId], references: [id])
+  appointment Appointment?       @relation(fields: [appointmentId], references: [id])
+  items       PrescriptionItem[]
+
+  @@index([patientId, issuedAt])
+  @@index([status])
+  @@map("prescriptions")
+}
+
+model PrescriptionItem {
+  id             String @id @default(cuid())
+  prescriptionId String @map("prescription_id")
+
+  medicineName String  @map("medicine_name")
+  genericName  String? @map("generic_name")
+  dosage       String // "250mg", "5ml"
+  form         String? // Syrup, Tablet, Drops
+  frequency    String // "3x daily", "Every 8 hours"
+  durationDays Int    @map("duration_days")
+  quantity     String?
+  instructions String? // "Take after meals"
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([prescriptionId])
+  @@map("prescription_items")
+}
+
+// ─────────────────────────────────────────────────────────
+//  MEDICAL NOTES — clinical documentation
+// ─────────────────────────────────────────────────────────
+
+model MedicalNote {
+  id            String  @id @default(cuid())
+  patientId     String  @map("patient_id")
+  appointmentId String? @map("appointment_id")
+  authorId      String  @map("author_id")
+
+  // SOAP note format
+  subjective String?
+  objective  String?
+  assessment String?
+  plan       String?
+
+  content String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+  author      User         @relation(fields: [authorId], references: [id])
+
+  @@index([patientId, createdAt])
+  @@map("medical_notes")
+}
+
+// ─────────────────────────────────────────────────────────
+//  AUDIT LOG — HIPAA-style access trail
+// ─────────────────────────────────────────────────────────
+
+model AuditLog {
+  id     String  @id @default(cuid())
+  userId String? @map("user_id")
+
+  action     String // CREATE, READ, UPDATE, DELETE, LOGIN
+  entity     String // Patient, Appointment...
+  entityId   String? @map("entity_id")
+  ipAddress  String? @map("ip_address")
+  userAgent  String? @map("user_agent")
+  metadata   Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([entity, entityId])
+  @@map("audit_logs")
+}

@@ -1,0 +1,22 @@
+node_modules/
+.next/
+dist/
+build/
+out/
+.turbo/
+*.log
+npm-debug.log*
+.env
+.env.local
+.env.*.local
+!.env.example
+.DS_Store
+Thumbs.db
+coverage/
+*.tsbuildinfo
+.vscode/
+.idea/
+packages/database/prisma/migrations/dev.db*
+
+# local scratch
+_to_delete/

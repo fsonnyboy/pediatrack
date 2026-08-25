@@ -1,0 +1,43 @@
+{
+  "name": "peditrack",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PediTrack - Pediatric Clinic Management Platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "type-check": "turbo run type-check",
+    "setup": "npm run docker:up && npm run db:generate && npm run db:migrate && npm run db:seed",
+    "docker:up": "docker compose up -d --wait",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f postgres",
+    "docker:nuke": "docker compose down -v",
+    "db:check": "node scripts/check-db.mjs",
+    "db:generate": "npm run db:generate -w @peditrack/database",
+    "db:migrate": "npm run db:migrate -w @peditrack/database",
+    "db:deploy": "npm run db:deploy -w @peditrack/database",
+    "db:seed": "npm run db:seed -w @peditrack/database",
+    "db:studio": "npm run db:studio -w @peditrack/database",
+    "db:reset": "npm run db:reset -w @peditrack/database",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "turbo": "^2.0.14",
+    "typescript": "^5.5.4"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "npm@10.8.2",
+  "dependencies": {
+    "echarts": "^6.1.0",
+    "echarts-for-react": "^3.0.6"
+  }
+}
