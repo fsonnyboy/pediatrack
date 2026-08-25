@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { AppointmentStatus } from '@peditrack/database';
 import { calculateAge } from '@peditrack/utils';
 
 import { PrismaService } from '../../prisma/prisma.service';
@@ -113,7 +114,7 @@ export class DashboardService {
     const common = {
       where: {
         scheduledAt: { gte: from, lte: to },
-        status: { in: ['PENDING', 'CONFIRMED'] as const },
+        status: { in: [AppointmentStatus.PENDING, AppointmentStatus.CONFIRMED] },
       },
       orderBy: { scheduledAt: 'asc' as const },
       take: 50,
