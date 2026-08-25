@@ -12,7 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
-import { GrowthChart } from '@/components/patients/growth-chart';
+import { GrowthChart } from '@/components/growth/GrowthChart';
+import { useGrowthChart } from '@/hooks/useGrowthChart';
 import { cn } from '@/lib/utils';
 import { patientsApi } from '@/lib/queries';
 import {
@@ -56,11 +57,9 @@ export default function PatientProfilePage() {
     enabled: tab === 'prescriptions',
   });
 
-  const { data: growth } = useQuery<any>({
-    queryKey: ['patient', id, 'growth'],
-    queryFn: () => patientsApi.growthChart(id),
-    enabled: tab === 'growth',
-  });
+  const {
+    data: growth, isLoading: growthLoading, error: growthError, refetch: refetchGrowth,
+  } = useGrowthChart(tab === 'growth' ? id : '');
 
   if (isLoading) {
     return (
@@ -330,14 +329,31 @@ export default function PatientProfilePage() {
 
       {/* Growth */}
       {tab === 'growth' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Growth over time</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            <GrowthChart points={growth?.points ?? []} />
-          </CardContent>
-        </Card>
+        <>
+          {growthLoading && (
+            <div className="space-y-4">
+              <Skeleton className="h-8 w-40" />
+              <Skeleton className="h-96" />
+            </div>
+          )}
+
+          {!growthLoading && growthError && (
+            <EmptyState
+              icon={TrendingUp}
+              title="Could not load growth data"
+              description={growthError}
+              action={{ label: 'Retry', onClick: refetchGrowth }}
+            />
+          )}
+
+          {!growthLoading && !growthError && growth && (
+            <GrowthChart
+              data={growth}
+              patientName={fullName(patient.firstName, patient.lastName, patient.middleName)}
+              chartHeight={400}
+            />
+          )}
+        </>
       )}
     </div>
   );

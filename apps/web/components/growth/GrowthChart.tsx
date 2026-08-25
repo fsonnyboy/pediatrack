@@ -311,11 +311,6 @@ export function GrowthChart({ data, patientName, chartHeight = 380 }: Props) {
             <p className="gc-sub">WHO 2006 Child Growth Standards · Ages 0–60 months</p>
           </div>
         </div>
-        <div className="gc-badge">
-          <span aria-hidden="true">{sex === 'MALE' ? '👦' : '👧'}</span>
-          <strong>{patientName ?? 'Patient'}</strong>
-          {latestAge != null && <span className="gc-age">{latestAge} mo</span>}
-        </div>
       </header>
 
       {data.sexInferred && (
@@ -484,14 +479,6 @@ export function GrowthChart({ data, patientName, chartHeight = 380 }: Props) {
           display: flex;
           flex-direction: column;
           gap: 16px;
-        }
-        @media (prefers-color-scheme: dark) {
-          :root:not([data-theme='light']) .gc {
-            --gc-surface: #132437; --gc-surface2: #0F1E2E; --gc-border: #1E3651;
-            --gc-text: #DAEAF5; --gc-text-2: #7AAAC8; --gc-text-3: #3E6B8A;
-            --gc-accent: #4D9FEC; --gc-accent-l: #0D2A44;
-            --gc-shadow: 0 1px 4px rgba(0,0,0,.3), 0 4px 16px rgba(0,0,0,.25);
-          }
         }
         [data-theme='dark'] .gc, .dark .gc {
           --gc-surface: #132437; --gc-surface2: #0F1E2E; --gc-border: #1E3651;
