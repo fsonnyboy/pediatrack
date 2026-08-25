@@ -4,6 +4,8 @@ import {
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 
+import { AppointmentStatus, AppointmentType } from '@peditrack/database';
+
 import { PaginationDto } from '../../../common/dto/pagination.dto';
 
 // SEC-010 fix: explicit allowlist of permitted sort columns for the Appointment model.
@@ -24,11 +26,11 @@ enum AppointmentTypeEnum {
 export class QueryAppointmentsDto extends PaginationDto {
   @ApiPropertyOptional({ enum: AppointmentStatusEnum })
   @IsOptional() @IsEnum(AppointmentStatusEnum)
-  status?: string;
+  status?: AppointmentStatus;
 
   @ApiPropertyOptional({ enum: AppointmentTypeEnum })
   @IsOptional() @IsEnum(AppointmentTypeEnum)
-  type?: string;
+  type?: AppointmentType;
 
   @ApiPropertyOptional()
   @IsOptional() @IsString()
@@ -52,9 +54,8 @@ export class QueryAppointmentsDto extends PaginationDto {
   @IsIn(APPOINTMENT_SORT_FIELDS, {
     message: `sortBy must be one of: ${APPOINTMENT_SORT_FIELDS.join(', ')}`,
   })
-  sortBy?: AppointmentSortField;
+  sortBy?: AppointmentSortField = undefined;
 
-  @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'asc' })
-  @IsOptional() @IsIn(['asc', 'desc'])
-  sortOrder?: 'asc' | 'desc';
+  // sortOrder is inherited from PaginationDto (already @IsEnum-validated there).
+  // Redeclaring it here added nothing and conflicted with the base type.
 }

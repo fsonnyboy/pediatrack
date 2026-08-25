@@ -4,6 +4,8 @@ import {
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 
+import { Gender } from '@peditrack/database';
+
 import { PaginationDto } from '../../../common/dto/pagination.dto';
 
 // SEC-010 fix: explicit allowlist of permitted sort columns for the Patient model.
@@ -28,7 +30,7 @@ export class QueryPatientsDto extends PaginationDto {
 
   @ApiPropertyOptional({ enum: GenderEnum })
   @IsOptional() @IsEnum(GenderEnum)
-  gender?: string;
+  gender?: Gender;
 
   @ApiPropertyOptional({ enum: AgeGroupEnum })
   @IsOptional() @IsEnum(AgeGroupEnum)
@@ -40,9 +42,7 @@ export class QueryPatientsDto extends PaginationDto {
   @IsIn(PATIENT_SORT_FIELDS, {
     message: `sortBy must be one of: ${PATIENT_SORT_FIELDS.join(', ')}`,
   })
-  sortBy?: PatientSortField;
+  sortBy?: PatientSortField = undefined;
 
-  @ApiPropertyOptional({ enum: ['asc', 'desc'], default: 'desc' })
-  @IsOptional() @IsIn(['asc', 'desc'])
-  sortOrder?: 'asc' | 'desc';
+  // sortOrder is inherited from PaginationDto (already @IsEnum-validated there).
 }

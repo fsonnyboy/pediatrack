@@ -110,16 +110,22 @@ export class DashboardService {
 
     const isClinical = ['ADMIN', 'DOCTOR', 'NURSE'].includes(callerRole);
 
-    return this.prisma.appointment.findMany({
+    const common = {
       where: {
         scheduledAt: { gte: from, lte: to },
-        status: { in: ['PENDING', 'CONFIRMED'] },
+        status: { in: ['PENDING', 'CONFIRMED'] as const },
       },
-      orderBy: { scheduledAt: 'asc' },
+      orderBy: { scheduledAt: 'asc' as const },
       take: 50,
-      // SEC-021 fix: receptionists get scheduling-only data, not patient demographics.
-      ...(isClinical ? { include: CLINICAL_INCLUDE } : { select: SCHEDULING_SELECT }),
-    });
+    };
+
+    // SEC-021 fix: receptionists get scheduling-only data, not patient demographics.
+    // Two concrete calls rather than a conditional spread — Prisma's generated
+    // types model `include` and `select` as mutually exclusive overloads, so a
+    // spread that could supply either fails to resolve to a single signature.
+    return isClinical
+      ? this.prisma.appointment.findMany({ ...common, include: CLINICAL_INCLUDE })
+      : this.prisma.appointment.findMany({ ...common, select: SCHEDULING_SELECT });
   }
 
   async getRecentPatients(limit = 8) {

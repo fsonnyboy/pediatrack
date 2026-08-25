@@ -65,7 +65,9 @@ export class AuditService {
           action: event.action,
           entity: event.entity,
           entityId: event.entityId ?? null,
-          detail: event.detail ?? null,
+          // The AuditLog model has no `detail` column — free-text context goes
+          // into the `metadata` Json field.
+          metadata: event.detail ? { detail: event.detail } : undefined,
           createdAt: new Date(),
         },
       });
