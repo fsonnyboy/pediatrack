@@ -1,4 +1,7 @@
-import { PrismaClient, UserRole, Gender, BloodType, AppointmentType, AppointmentStatus, ScreeningType } from '@prisma/client';
+import {
+  PrismaClient, UserRole, Gender, BloodType, AppointmentType, AppointmentStatus, ScreeningType,
+  MilestoneDomain,
+} from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 
@@ -48,6 +51,314 @@ const SCREENING_INSTRUMENTS = [
       'Age-banded milestone cutoffs per SWYC form; below cutoff on any domain = monitor/refer per clinical judgement',
   },
 ];
+
+/**
+ * The twelve CDC/AAP checklist ages, 2 months through 5 years.
+ * See MILESTONE-DATA-SOURCE.md for provenance and what to verify before
+ * relying on this clinically — the same discipline GROWTH-DATA-WARNING.md
+ * asks for on the WHO growth tables, applied before this data ever ships
+ * rather than after.
+ */
+const MILESTONE_CHECKLIST_AGES = [2, 4, 6, 9, 12, 15, 18, 24, 30, 36, 48, 60] as const;
+
+const MILESTONE_CHECKLIST_DATA: { ageMonths: number; domain: MilestoneDomain; items: string[] }[] = [
+  // ── 2 months ──────────────────────────────────────────
+  { ageMonths: 2, domain: MilestoneDomain.SOCIAL_EMOTIONAL, items: [
+    'Calms down when spoken to or picked up',
+    'Looks at your face',
+    'Seems happy to see you when you walk up to them',
+    'Smiles when you talk to or smile at them',
+  ] },
+  { ageMonths: 2, domain: MilestoneDomain.LANGUAGE_COMMUNICATION, items: [
+    'Makes sounds other than crying',
+    'Reacts to loud sounds',
+  ] },
+  { ageMonths: 2, domain: MilestoneDomain.COGNITIVE, items: [
+    'Watches you as you move',
+    'Looks at a toy for several seconds',
+  ] },
+  { ageMonths: 2, domain: MilestoneDomain.MOVEMENT_PHYSICAL, items: [
+    'Holds head up when on tummy',
+    'Moves both arms and both legs',
+    'Opens hands briefly',
+  ] },
+
+  // ── 4 months ──────────────────────────────────────────
+  { ageMonths: 4, domain: MilestoneDomain.SOCIAL_EMOTIONAL, items: [
+    'Smiles on his own to get your attention',
+    'Chuckles (not yet a full laugh) when you try to make her laugh',
+    'Looks at you, moves, or makes sounds to get or keep your attention',
+  ] },
+  { ageMonths: 4, domain: MilestoneDomain.LANGUAGE_COMMUNICATION, items: [
+    'Makes sounds like "oooo", "aahh" (cooing)',
+    'Makes sounds back when you talk to him',
+    'Turns head towards the sound of your voice',
+  ] },
+  { ageMonths: 4, domain: MilestoneDomain.COGNITIVE, items: [
+    'Opens his mouth when he sees a bottle',
+    'Looks at her hands with interest',
+  ] },
+  { ageMonths: 4, domain: MilestoneDomain.MOVEMENT_PHYSICAL, items: [
+    'Holds head steady without support while being held',
+    'Holds a toy when it is put into his hand',
+    'Uses his arm to swing at toys',
+    'Brings their hands to their mouth',
+    'Pushes up onto her elbows/forearms when on tummy',
+  ] },
+
+  // ── 6 months ──────────────────────────────────────────
+  { ageMonths: 6, domain: MilestoneDomain.SOCIAL_EMOTIONAL, items: [
+    'Knows familiar people',
+    'Likes to look at himself in a mirror',
+    'Laughs',
+  ] },
+  { ageMonths: 6, domain: MilestoneDomain.LANGUAGE_COMMUNICATION, items: [
+    'Takes turns making sounds with you',
+    'Blows "raspberries" (sticks tongue out and blows)',
+    'Makes squealing noises',
+  ] },
+  { ageMonths: 6, domain: MilestoneDomain.COGNITIVE, items: [
+    'Puts things in her mouth to explore them',
+    'Reaches to grab a toy he wants',
+    "Closes lips to show she doesn't want more food",
+  ] },
+  { ageMonths: 6, domain: MilestoneDomain.MOVEMENT_PHYSICAL, items: [
+    'Rolls from tummy to back',
+    'Pushes up with straight arms when on tummy',
+    'Leans on hands to support himself when sitting',
+  ] },
+
+  // ── 9 months ──────────────────────────────────────────
+  { ageMonths: 9, domain: MilestoneDomain.SOCIAL_EMOTIONAL, items: [
+    'Is shy, clingy, or fearful around strangers',
+    'Shows several facial expressions, like happy, sad, angry, and surprised',
+    'Looks when you call her name',
+    'Reacts when you leave (looks, reaches for you, or cries)',
+    'Smiles or laughs when you play peek-a-boo',
+  ] },
+  { ageMonths: 9, domain: MilestoneDomain.LANGUAGE_COMMUNICATION, items: [
+    'Makes different sounds like "mamamama" and "babababa"',
+    'Lifts arms up to be picked up',
+  ] },
+  { ageMonths: 9, domain: MilestoneDomain.COGNITIVE, items: [
+    'Looks for objects when dropped out of sight (like his spoon or toy)',
+    'Bangs two things together',
+  ] },
+  { ageMonths: 9, domain: MilestoneDomain.MOVEMENT_PHYSICAL, items: [
+    'Gets to a sitting position by herself',
+    'Moves things from one hand to her other hand',
+    'Uses fingers to "rake" food towards himself',
+  ] },
+
+  // ── 12 months ─────────────────────────────────────────
+  { ageMonths: 12, domain: MilestoneDomain.SOCIAL_EMOTIONAL, items: [
+    'Plays games such as "peek-a-boo" and "pat-a-cake"',
+  ] },
+  { ageMonths: 12, domain: MilestoneDomain.LANGUAGE_COMMUNICATION, items: [
+    'Waves "bye-bye"',
+    'Calls a parent "mama" or "dada" or another special name',
+    'Understands "no" (pauses briefly or stops when you say it)',
+  ] },
+  { ageMonths: 12, domain: MilestoneDomain.COGNITIVE, items: [
+    'Puts things in a container, like a block in a cup',
+    'Looks for things he sees you hide, like a toy under a blanket',
+  ] },
+  { ageMonths: 12, domain: MilestoneDomain.MOVEMENT_PHYSICAL, items: [
+    'Pulls to stand',
+    'Walks, holding on to furniture',
+    'Drinks from a cup without a lid, as you hold it',
+    'Picks things up between thumb and pointer finger, like small bits of food',
+  ] },
+
+  // ── 15 months (added 2022) ───────────────────────────────
+  { ageMonths: 15, domain: MilestoneDomain.SOCIAL_EMOTIONAL, items: [
+    'Shows excitement by clapping',
+    'Shows affection',
+    'Copies other children while playing, like taking toys out of a container when another child does',
+  ] },
+  { ageMonths: 15, domain: MilestoneDomain.LANGUAGE_COMMUNICATION, items: [
+    'Tries to say one or two words besides "mama" or "dada," like "ba" for ball or "da" for dog',
+    'Follows directions given with both a gesture and words',
+    'Points to ask for something or to get help',
+  ] },
+  { ageMonths: 15, domain: MilestoneDomain.COGNITIVE, items: [
+    'Tries to use things the right way, like a phone, cup, or book',
+    'Stacks at least two small objects, like blocks',
+  ] },
+  { ageMonths: 15, domain: MilestoneDomain.MOVEMENT_PHYSICAL, items: [
+    'Takes a few steps on his own',
+    'Uses fingers to feed herself some food',
+  ] },
+
+  // ── 18 months ─────────────────────────────────────────
+  { ageMonths: 18, domain: MilestoneDomain.SOCIAL_EMOTIONAL, items: [
+    'Moves away from you, but looks to make sure you are close by',
+    'Points to show you something interesting',
+    'Puts hands out for you to wash them',
+    'Looks at a few pages in a book with you',
+    'Helps you dress him by pushing arm through sleeve or lifting up foot',
+  ] },
+  { ageMonths: 18, domain: MilestoneDomain.LANGUAGE_COMMUNICATION, items: [
+    'Tries to say three or more words besides "mama" or "dada"',
+    'Follows one-step directions without any gestures, like giving you the toy when you say "give it to me"',
+  ] },
+  { ageMonths: 18, domain: MilestoneDomain.COGNITIVE, items: [
+    'Copies you doing chores, like sweeping with a broom',
+    'Plays with toys in a simple way, like pushing a toy car',
+  ] },
+  { ageMonths: 18, domain: MilestoneDomain.MOVEMENT_PHYSICAL, items: [
+    'Walks without holding on to anyone or anything',
+    'Scribbles',
+    'Drinks from a cup without a lid and may spill sometimes',
+    "Feeds herself with her fingers",
+    'Tries to eat with a spoon',
+    'Climbs on and off a couch or chair without help',
+  ] },
+
+  // ── 24 months ─────────────────────────────────────────
+  { ageMonths: 24, domain: MilestoneDomain.SOCIAL_EMOTIONAL, items: [
+    'Notices when others are hurt or upset, like pausing or looking sad when someone is crying',
+    'Looks at your face to see how to react in a new situation',
+  ] },
+  { ageMonths: 24, domain: MilestoneDomain.LANGUAGE_COMMUNICATION, items: [
+    'Points to things or pictures when you ask, like "Where is the bear?"',
+    'Says at least two words together, like "more milk"',
+    'Points to at least two body parts when you ask him to show you',
+    'Uses more gestures than just waving and pointing, like blowing a kiss or nodding yes',
+  ] },
+  { ageMonths: 24, domain: MilestoneDomain.COGNITIVE, items: [
+    'Holds something in one hand while using the other hand; for example, holding a container and taking the lid off',
+    'Tries to use switches, knobs, or buttons on a toy',
+    'Plays with more than one toy at the same time, like putting toy food on a toy plate',
+  ] },
+  { ageMonths: 24, domain: MilestoneDomain.MOVEMENT_PHYSICAL, items: [
+    'Kicks a ball',
+    'Runs',
+    'Walks (not climbs) up a few stairs with or without help',
+    'Eats with a spoon',
+  ] },
+
+  // ── 30 months (added 2022) ───────────────────────────────
+  { ageMonths: 30, domain: MilestoneDomain.SOCIAL_EMOTIONAL, items: [
+    'Plays next to other children and sometimes plays with them',
+    'Shows you what she can do by saying, "look at me!"',
+    'Follows simple routines when told, like helping to pick up toys when you say, "it\'s clean-up time."',
+  ] },
+  { ageMonths: 30, domain: MilestoneDomain.LANGUAGE_COMMUNICATION, items: [
+    'Says about 50 words',
+    'Says two or more words together, with one action word, like "doggie run"',
+    'Names things in a book when you point and ask, "what is this?"',
+    'Says words like "I", "me", or "we"',
+  ] },
+  { ageMonths: 30, domain: MilestoneDomain.COGNITIVE, items: [
+    'Uses things to pretend, like feeding a block to a doll as if it were food',
+    'Shows simple problem-solving skills, like standing on a small stool to reach something',
+    'Follows two-step instructions like "Put the toy down and close the door"',
+    'Shows he knows at least one color, like pointing to a red crayon when you ask, "Which one is red?"',
+  ] },
+  { ageMonths: 30, domain: MilestoneDomain.MOVEMENT_PHYSICAL, items: [
+    'Uses hands to twist things, like turning doorknobs or unscrewing lids',
+    'Takes some clothes off by himself, like loose pants or an open jacket',
+    'Jumps off the ground with both feet',
+    'Turns book pages, one at a time, when you read to her',
+  ] },
+
+  // ── 3 years (36 months) ─────────────────────────────────
+  { ageMonths: 36, domain: MilestoneDomain.SOCIAL_EMOTIONAL, items: [
+    'Calms down within 10 minutes after you leave her, like at a childcare drop off',
+    'Notices other children and joins them to play',
+  ] },
+  { ageMonths: 36, domain: MilestoneDomain.LANGUAGE_COMMUNICATION, items: [
+    'Talks with you in conversation using at least two back-and-forth exchanges',
+    'Asks "who," "what", "where" and "why" questions, like "Where is mommy/daddy?"',
+    'Says what action is happening in a picture or book when asked, like "running," "eating," or "playing"',
+    'Says first name when asked',
+    'Talks well enough for others to understand most of the time',
+  ] },
+  { ageMonths: 36, domain: MilestoneDomain.COGNITIVE, items: [
+    'Draws a circle, when you show him how',
+    'Avoids touching hot objects, like a stove, when you warn her',
+  ] },
+  { ageMonths: 36, domain: MilestoneDomain.MOVEMENT_PHYSICAL, items: [
+    'Strings items together, like large beads or macaroni',
+    'Puts on some clothes by himself, like loose pants or a jacket',
+    'Uses a fork',
+  ] },
+
+  // ── 4 years (48 months) ─────────────────────────────────
+  { ageMonths: 48, domain: MilestoneDomain.SOCIAL_EMOTIONAL, items: [
+    'Pretends to be something else during play (teacher, superhero, dog)',
+    'Asks to go play with children if none are around, like "Can I go play with Alex?"',
+    'Comforts others who are hurt or sad, like hugging a crying friend',
+    'Avoids danger, like not jumping from tall heights at the playground',
+    'Likes to be a "helper"',
+    'Changes behavior based on where she is (place of worship, library, playground)',
+  ] },
+  { ageMonths: 48, domain: MilestoneDomain.LANGUAGE_COMMUNICATION, items: [
+    'Says sentences with four or more words',
+    'Says some words from a song, story, or nursery rhyme',
+    'Talks about at least one thing that happened during his day, like "I played soccer."',
+    'Answers simple questions like "What is a coat for?" or "What is a crayon for?"',
+  ] },
+  { ageMonths: 48, domain: MilestoneDomain.COGNITIVE, items: [
+    'Names a few colors of items',
+    'Tells what comes next in a well-known story',
+    'Draws a person with three or more body parts',
+  ] },
+  { ageMonths: 48, domain: MilestoneDomain.MOVEMENT_PHYSICAL, items: [
+    'Catches a large ball most of the time',
+    'Serves himself food or pours water, with adult supervision',
+    'Unbuttons some buttons',
+    'Holds crayon or pencil between fingers and thumb (not a fist)',
+  ] },
+
+  // ── 5 years (60 months) ─────────────────────────────────
+  { ageMonths: 60, domain: MilestoneDomain.SOCIAL_EMOTIONAL, items: [
+    'Follows rules or takes turns when playing games with other children',
+    'Sings, dances, or acts for you',
+    'Does simple chores at home, like matching socks or clearing the table after dinner',
+  ] },
+  { ageMonths: 60, domain: MilestoneDomain.LANGUAGE_COMMUNICATION, items: [
+    'Tells a story she heard or made up with at least two events, like a cat was stuck in a tree and a firefighter saved it',
+    'Answers questions about a book or story after you read or tell it to him',
+    'Keeps a conversation going with more than three back-and-forth exchanges',
+    'Uses or recognizes simple rhymes (bat-cat, ball-tall)',
+  ] },
+  { ageMonths: 60, domain: MilestoneDomain.COGNITIVE, items: [
+    'Counts to 10',
+    'Names some numbers between 1 and 5 when you point to them',
+    'Uses words about time, like "yesterday," "tomorrow," "morning," or "night"',
+    'Pays attention for 5 to 10 minutes during activities, like story time or arts and crafts (screen time does not count)',
+    'Writes some letters in her name',
+    'Names some letters when you point to them',
+  ] },
+  { ageMonths: 60, domain: MilestoneDomain.MOVEMENT_PHYSICAL, items: [
+    'Buttons some buttons',
+    'Hops on one foot',
+  ] },
+];
+
+const MILESTONE_DOMAIN_CODE: Record<MilestoneDomain, string> = {
+  SOCIAL_EMOTIONAL: 'SOC',
+  LANGUAGE_COMMUNICATION: 'LANG',
+  COGNITIVE: 'COG',
+  MOVEMENT_PHYSICAL: 'MOVE',
+};
+
+const MILESTONE_SOURCE = 'CDC Learn the Signs. Act Early.';
+const MILESTONE_SOURCE_VERSION = '2022';
+
+const MILESTONE_DEFINITIONS = MILESTONE_CHECKLIST_DATA.flatMap((group, groupIdx) =>
+  group.items.map((description, itemIdx) => ({
+    code: `CDC2022_${group.ageMonths}M_${MILESTONE_DOMAIN_CODE[group.domain]}_${itemIdx + 1}`,
+    checklistAgeMonths: group.ageMonths,
+    domain: group.domain,
+    description,
+    source: MILESTONE_SOURCE,
+    sourceVersion: MILESTONE_SOURCE_VERSION,
+    sortOrder: groupIdx * 100 + itemIdx,
+  })),
+);
 
 /**
  * Starter weight-based dose ranges for common pediatric prescriptions, keyed
@@ -477,6 +788,29 @@ async function main() {
   }
   console.log(`✅ ${SCREENING_INSTRUMENTS.length} screening instruments seeded`);
 
+  // ── Milestone definitions ────────────────────────────────
+  // Count assertion (per MILESTONE-DATA-SOURCE.md): a truncated or malformed
+  // source list must fail the seed loudly rather than silently ship an
+  // incomplete checklist. 12 checklist ages × 4 domains = 48 groups.
+  const expectedGroups = MILESTONE_CHECKLIST_AGES.length * 4;
+  if (MILESTONE_CHECKLIST_DATA.length !== expectedGroups) {
+    throw new Error(
+      `Milestone checklist data incomplete: expected ${expectedGroups} age/domain groups, ` +
+      `found ${MILESTONE_CHECKLIST_DATA.length}`,
+    );
+  }
+  for (const d of MILESTONE_DEFINITIONS) {
+    await prisma.milestoneDefinition.upsert({
+      where: { code: d.code },
+      update: {},
+      create: d,
+    });
+  }
+  console.log(
+    `✅ ${MILESTONE_DEFINITIONS.length} milestone definitions seeded ` +
+    `(${MILESTONE_CHECKLIST_DATA.length} age/domain groups, CDC 2022 revision)`,
+  );
+
   // ── Medicine dose references ─────────────────────────────
   for (const m of MEDICINE_DOSE_REFERENCES) {
     await prisma.medicineDoseReference.upsert({
@@ -680,6 +1014,11 @@ async function main() {
   console.log('\n   ⚠️  Percentile accuracy: see GROWTH-DATA-WARNING.md — the LMS');
   console.log('       reference tables are unverified and must be replaced with');
   console.log('       official WHO data before any clinical use.');
+  console.log('───────────────────────────────────────────────────────\n');
+
+  console.log('   ⚠️  Milestone checklist provenance: see MILESTONE-DATA-SOURCE.md —');
+  console.log('       the 2/4/6/9-month entries could not be cross-verified against');
+  console.log('       a second source and should be spot-checked before clinical use.');
   console.log('───────────────────────────────────────────────────────\n');
 }
 

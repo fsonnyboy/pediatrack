@@ -92,6 +92,14 @@ export class PatientsController {
     return this.patientsService.getScreenings(id, user.id);
   }
 
+  // Same restriction as screenings above — developmental data excludes RECEPTIONIST.
+  @Get(':id/milestones')
+  @Roles('ADMIN', 'DOCTOR', 'NURSE')
+  @ApiOperation({ summary: 'Developmental milestone trajectory and concerns for a patient' })
+  getMilestones(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.patientsService.getMilestones(id, user.id);
+  }
+
   // SEC-005 fix: prescriptions contain sensitive PHI — restrict to clinical staff.
   @Get(':id/prescriptions')
   @Roles('ADMIN', 'DOCTOR', 'NURSE')

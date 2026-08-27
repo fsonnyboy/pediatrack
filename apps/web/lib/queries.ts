@@ -4,6 +4,7 @@ import type {
   Vaccine, VaccinationRecord, AuthUser, LoginResponse,
   ScreeningInstrument, ScreeningAdministration, DueScreening,
   OpenReferral, UnaddressedScreening,
+  MilestoneDefinition, PatientMilestones, DevelopmentalConcern, OpenConcern,
 } from '@peditrack/types';
 
 // ── Auth ────────────────────────────────────────────────
@@ -47,6 +48,7 @@ export const patientsApi = {
   growthChart: (id: string) => api.get(`/patients/${id}/growth-chart`),
   notes: (id: string) => api.get(`/patients/${id}/notes`),
   screenings: (id: string) => api.get<ScreeningAdministration[]>(`/patients/${id}/screenings`),
+  milestones: (id: string) => api.get<PatientMilestones>(`/patients/${id}/milestones`),
 };
 
 // ── Appointments ────────────────────────────────────────
@@ -96,6 +98,16 @@ export const screeningsApi = {
     api.post(`/screenings/${administrationId}/referral`, data),
   updateReferral: (referralId: string, data: unknown) =>
     api.patch(`/screening-referrals/${referralId}`, data),
+};
+
+// ── Milestones ──────────────────────────────────────────
+export const milestonesApi = {
+  definitions: (ageMonths?: number) =>
+    api.get<MilestoneDefinition[]>(`/milestone-definitions${ageMonths ? `?ageMonths=${ageMonths}` : ''}`),
+  createObservations: (data: unknown) => api.post('/milestones/observations', data),
+  createConcern: (data: unknown) => api.post<DevelopmentalConcern>('/milestones/concerns', data),
+  openConcerns: () => api.get<OpenConcern[]>('/milestones/concerns/open'),
+  updateConcern: (id: string, data: unknown) => api.patch(`/milestones/concerns/${id}`, data),
 };
 
 // ── Prescriptions ───────────────────────────────────────

@@ -5,27 +5,32 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
-  AlertTriangle, ArrowLeft, Calendar, ClipboardCheck, Phone, Pill, Syringe, TrendingUp, User,
+  AlertTriangle, ArrowLeft, Baby, Calendar, ClipboardCheck, Phone, Pill, Plus, Syringe,
+  TrendingUp, User,
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge, StatusBadge, type BadgeProps } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
+import { Button } from '@/components/ui/button';
 import { GrowthChart } from '@/components/growth/GrowthChart';
 import { useGrowthChart } from '@/hooks/useGrowthChart';
+import { MilestoneChecklistForm } from '@/components/milestones/milestone-checklist-form';
+import { MilestoneConcernForm } from '@/components/milestones/milestone-concern-form';
 import { cn } from '@/lib/utils';
 import { patientsApi } from '@/lib/queries';
 import {
   calculateAge, formatBloodType, formatDate, formatDateTime, formatPhone, fullName,
 } from '@peditrack/utils';
-import type { ScreeningOutcome } from '@peditrack/types';
+import type { ScreeningOutcome, MilestoneDomain, MilestoneStatus } from '@peditrack/types';
 
 const TABS = [
   { id: 'overview',      label: 'Overview',      icon: User },
   { id: 'visits',        label: 'Visits',        icon: Calendar },
   { id: 'vaccinations',  label: 'Vaccinations',  icon: Syringe },
   { id: 'screening',     label: 'Screening',     icon: ClipboardCheck },
+  { id: 'milestones',    label: 'Milestones',    icon: Baby },
   { id: 'prescriptions', label: 'Prescriptions', icon: Pill },
   { id: 'growth',        label: 'Growth',        icon: TrendingUp },
 ] as const;
@@ -37,11 +42,28 @@ const OUTCOME_BADGE: Record<ScreeningOutcome, { variant: BadgeProps['variant']; 
   INCOMPLETE: { variant: 'neutral', label: 'Incomplete' },
 };
 
+const DOMAIN_LABEL: Record<MilestoneDomain, string> = {
+  SOCIAL_EMOTIONAL: 'Social / Emotional',
+  LANGUAGE_COMMUNICATION: 'Language / Communication',
+  COGNITIVE: 'Cognitive',
+  MOVEMENT_PHYSICAL: 'Movement / Physical',
+};
+
+const MILESTONE_STATUS_BADGE: Record<MilestoneStatus, { variant: BadgeProps['variant']; label: string }> = {
+  ACHIEVED: { variant: 'success', label: 'Achieved' },
+  EMERGING: { variant: 'accent', label: 'Emerging' },
+  NOT_YET: { variant: 'warning', label: 'Not yet' },
+  NOT_ASSESSED: { variant: 'neutral', label: 'Not assessed' },
+  REGRESSED: { variant: 'danger', label: 'Regressed' },
+};
+
 type TabId = (typeof TABS)[number]['id'];
 
 export default function PatientProfilePage() {
   const { id } = useParams<{ id: string }>();
   const [tab, setTab] = useState<TabId>('overview');
+  const [checklistOpen, setChecklistOpen] = useState(false);
+  const [concernOpen, setConcernOpen] = useState(false);
 
   const { data: patient, isLoading } = useQuery({
     queryKey: ['patient', id],
@@ -70,6 +92,12 @@ export default function PatientProfilePage() {
     queryKey: ['patient', id, 'screenings'],
     queryFn: () => patientsApi.screenings(id),
     enabled: tab === 'screening',
+  });
+
+  const { data: milestones } = useQuery({
+    queryKey: ['patient', id, 'milestones'],
+    queryFn: () => patientsApi.milestones(id),
+    enabled: tab === 'milestones',
   });
 
   const {
@@ -356,6 +384,113 @@ export default function PatientProfilePage() {
             )}
           </CardContent>
         </Card>
+      )}
+
+      {/* Milestones — developmental surveillance, distinct from the formal
+          screening checkpoints above: this is the continuous record built
+          from every well-child visit rather than four discrete events. */}
+      {tab === 'milestones' && (
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-muted-foreground">
+              Milestone checklist observations and developmental concerns raised over time.
+            </p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setConcernOpen(true)}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                Log concern
+              </Button>
+              <Button size="sm" onClick={() => setChecklistOpen(true)}>
+                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                Record checklist
+              </Button>
+            </div>
+          </div>
+
+          {milestones?.concerns && milestones.concerns.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Developmental concerns</CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <ul className="divide-y divide-border">
+                  {milestones.concerns.map((c) => (
+                    <li key={c.id} className="px-5 py-3.5">
+                      <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-semibold">
+                          {c.source.charAt(0) + c.source.slice(1).toLowerCase()}
+                          {c.domain && (
+                            <span className="tabular text-muted-foreground"> · {DOMAIN_LABEL[c.domain]}</span>
+                          )}
+                        </p>
+                        <Badge variant={c.resolvedAt ? 'success' : 'warning'}>
+                          {c.resolvedAt ? 'Resolved' : 'Open'}
+                        </Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{c.description}</p>
+                      {c.actionTaken && (
+                        <p className="mt-1 text-xs text-muted-foreground">Action: {c.actionTaken}</p>
+                      )}
+                      <p className="tabular mt-1 text-xs text-muted-foreground">
+                        Raised {formatDate(c.raisedAt)}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          )}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Milestone trajectory</CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              {!milestones?.observations?.length ? (
+                <EmptyState
+                  icon={Baby}
+                  title="No milestones recorded"
+                  description="Record a checklist pass to start building this patient's developmental trajectory."
+                />
+              ) : (
+                <ul className="divide-y divide-border">
+                  {milestones.observations.map((o) => (
+                    <li key={o.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold">{o.definition?.description}</p>
+                        <p className="tabular mt-0.5 text-xs text-muted-foreground">
+                          {o.definition && DOMAIN_LABEL[o.definition.domain]} · {formatDate(o.observedAt)} ·{' '}
+                          {o.ageBasisUsed === 'CORRECTED'
+                            ? `${o.correctedAgeMonths}mo corrected (${o.chronologicalAgeMonths}mo chronological)`
+                            : `${o.chronologicalAgeMonths}mo`}
+                        </p>
+                        {o.note && <p className="mt-1 text-sm text-muted-foreground">{o.note}</p>}
+                      </div>
+                      <Badge variant={MILESTONE_STATUS_BADGE[o.status].variant}>
+                        {MILESTONE_STATUS_BADGE[o.status].label}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {patient && (
+        <>
+          <MilestoneChecklistForm
+            open={checklistOpen}
+            onClose={() => setChecklistOpen(false)}
+            patient={patient}
+          />
+          <MilestoneConcernForm
+            open={concernOpen}
+            onClose={() => setConcernOpen(false)}
+            patientId={patient.id}
+          />
+        </>
       )}
 
       {/* Prescriptions */}

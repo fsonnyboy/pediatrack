@@ -1,7 +1,10 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import { Prisma } from '@peditrack/database';
 import { randomBytes } from 'crypto';
-import { calculateAge, generateMRN, calculateBMI, calculateGrowthPercentiles } from '@peditrack/utils';
+import {
+  calculateAge, calculateCorrectedAge, generateMRN, calculateBMI, calculateGrowthPercentiles,
+} from '@peditrack/utils';
+import type { CorrectedAge } from '@peditrack/utils';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -280,13 +283,16 @@ export class PatientsService {
     const sex: 'MALE' | 'FEMALE' = patient.gender === 'FEMALE' ? 'FEMALE' : 'MALE';
     const sexInferred = patient.gender !== 'MALE' && patient.gender !== 'FEMALE';
 
+    // A preterm infant is plotted against WHO curves on corrected age, not
+    // chronological — otherwise normal prematurity reads as faltering growth.
+    // See calculateCorrectedAge (@peditrack/utils) for the correction rule.
     const toPoint = (v: {
       recordedAt: Date;
       weightKg: number | null;
       heightCm: number | null;
       headCircumference: number | null;
       bmi: number | null;
-    }, ageMonths: number) => {
+    }, age: CorrectedAge) => {
       const bmi = v.bmi ?? calculateBMI(v.weightKg, v.heightCm);
       const percentiles = calculateGrowthPercentiles(
         {
@@ -296,11 +302,13 @@ export class PatientsService {
           bmi: bmi ?? undefined,
         },
         sex,
-        ageMonths,
+        age.correctedMonths,
       );
       return {
         recordedAt: v.recordedAt,
-        ageMonths,
+        ageMonths: age.correctedMonths,
+        chronologicalAgeMonths: age.chronologicalMonths,
+        ageBasisUsed: age.ageBasisUsed,
         weightKg: v.weightKg,
         heightCm: v.heightCm,
         headCircumference: v.headCircumference,
@@ -310,7 +318,7 @@ export class PatientsService {
     };
 
     const points = vitals.map((v) =>
-      toPoint(v, calculateAge(patient.dateOfBirth, v.recordedAt).totalMonths),
+      toPoint(v, calculateCorrectedAge(patient.dateOfBirth, patient.gestationalAge, v.recordedAt)),
     );
 
     if (patient.birthWeightKg || patient.birthHeightCm) {
@@ -323,7 +331,7 @@ export class PatientsService {
             headCircumference: null,
             bmi: null,
           },
-          0,
+          { chronologicalMonths: 0, correctedMonths: 0, ageBasisUsed: 'CHRONOLOGICAL', isPreterm: false },
         ),
       );
     }
@@ -334,8 +342,39 @@ export class PatientsService {
       sexInferred,
       gender: patient.gender,
       dateOfBirth: patient.dateOfBirth,
+      gestationalAge: patient.gestationalAge,
+      isPreterm: typeof patient.gestationalAge === 'number' && patient.gestationalAge < 37,
       points,
     };
+  }
+
+  /** Milestone trajectory and developmental concerns — the surveillance half of the record. */
+  async getMilestones(id: string, requestingUserId: string) {
+    await this.assertExists(id);
+
+    await this.audit.log({
+      userId: requestingUserId,
+      action: 'READ',
+      entity: 'MilestoneObservation',
+      detail: `via patient ${id}`,
+    });
+
+    const [observations, concerns] = await Promise.all([
+      this.prisma.milestoneObservation.findMany({
+        where: { patientId: id },
+        orderBy: { observedAt: 'desc' },
+        include: {
+          definition: true,
+          observedBy: { select: { id: true, firstName: true, lastName: true } },
+        },
+      }),
+      this.prisma.developmentalConcern.findMany({
+        where: { patientId: id },
+        orderBy: { raisedAt: 'desc' },
+      }),
+    ]);
+
+    return { observations, concerns };
   }
 
   async getMedicalNotes(id: string, requestingUserId: string) {

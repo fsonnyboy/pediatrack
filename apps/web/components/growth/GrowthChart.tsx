@@ -39,7 +39,11 @@ const ReactECharts = dynamic(() => import('echarts-for-react'), {
 
 export interface GrowthPoint {
   recordedAt: string;
+  /** Plotting age — corrected for prematurity when the patient is preterm and under ~24mo. */
   ageMonths: number;
+  /** Age since birth, unadjusted. Differs from ageMonths only when ageBasisUsed is CORRECTED. */
+  chronologicalAgeMonths?: number;
+  ageBasisUsed?: 'CHRONOLOGICAL' | 'CORRECTED';
   weightKg: number | null;
   heightCm: number | null;
   headCircumference: number | null;
@@ -52,6 +56,8 @@ export interface GrowthChartData {
   /** True when the patient's gender is OTHER and boys' standards were used. */
   sexInferred?: boolean;
   dateOfBirth: string;
+  gestationalAge?: number | null;
+  isPreterm?: boolean;
   points: GrowthPoint[];
 }
 
@@ -318,6 +324,14 @@ export function GrowthChart({ data, patientName, chartHeight = 380 }: Props) {
           This patient&rsquo;s gender is recorded as <strong>Other</strong>. WHO publishes
           separate standards for boys and girls only, so percentiles are charted against
           the {sex === 'MALE' ? 'boys' : 'girls'}&rsquo; standard — interpret with care.
+        </p>
+      )}
+
+      {data.isPreterm && (
+        <p className="gc-note">
+          Born at <strong>{data.gestationalAge} weeks</strong> gestation. Points before roughly
+          24 months are plotted on <strong>corrected age</strong> (adjusted for prematurity),
+          not age since birth — otherwise normal catch-up growth reads as faltering.
         </p>
       )}
 

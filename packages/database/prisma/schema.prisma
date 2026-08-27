@@ -75,6 +75,40 @@ enum ReferralStatus {
   LOST
 }
 
+// Developmental surveillance — milestone checklists observed at every
+// well-child visit, distinct from the four formal screening instruments above.
+enum MilestoneDomain {
+  SOCIAL_EMOTIONAL
+  LANGUAGE_COMMUNICATION
+  COGNITIVE
+  MOVEMENT_PHYSICAL
+}
+
+enum MilestoneStatus {
+  ACHIEVED
+  EMERGING
+  NOT_YET
+  NOT_ASSESSED // the default — an unasked question must never read as a pass
+  REGRESSED // loss of a skill already achieved; more urgent than NOT_YET
+}
+
+enum ObservationSource {
+  CLINICIAN_OBSERVED
+  CAREGIVER_REPORTED
+}
+
+enum AgeBasis {
+  CHRONOLOGICAL
+  CORRECTED
+}
+
+enum ConcernSource {
+  CAREGIVER
+  CLINICIAN
+  TEACHER
+  OTHER
+}
+
 enum BloodType {
   A_POSITIVE
   A_NEGATIVE
@@ -114,13 +148,15 @@ model User {
   deletedAt DateTime? @map("deleted_at")
 
   // Relations
-  appointmentsAsDoctor Appointment[]        @relation("DoctorAppointments")
-  vaccinationsGiven    VaccinationRecord[]
-  prescriptionsIssued  Prescription[]
-  medicalNotes         MedicalNote[]
-  vitalSignsRecorded   VitalSign[]
+  appointmentsAsDoctor   Appointment[]             @relation("DoctorAppointments")
+  vaccinationsGiven      VaccinationRecord[]
+  prescriptionsIssued    Prescription[]
+  medicalNotes           MedicalNote[]
+  vitalSignsRecorded     VitalSign[]
   screeningsAdministered ScreeningAdministration[]
-  auditLogs            AuditLog[]
+  milestonesObserved     MilestoneObservation[]
+  concernsRecorded       DevelopmentalConcern[]
+  auditLogs              AuditLog[]
 
   @@index([email])
   @@index([role, isActive])
@@ -143,13 +179,13 @@ model Patient {
   bloodType   BloodType @default(UNKNOWN) @map("blood_type")
 
   // Birth details — important in pediatrics
-  birthWeightKg   Float? @map("birth_weight_kg")
-  birthHeightCm   Float? @map("birth_height_cm")
-  gestationalAge  Int?   @map("gestational_age_weeks")
+  birthWeightKg  Float? @map("birth_weight_kg")
+  birthHeightCm  Float? @map("birth_height_cm")
+  gestationalAge Int?   @map("gestational_age_weeks")
 
-  allergies       String[] @default([])
+  allergies         String[] @default([])
   chronicConditions String[] @default([]) @map("chronic_conditions")
-  notes           String?
+  notes             String?
 
   photoUrl String? @map("photo_url")
   isActive Boolean @default(true) @map("is_active")
@@ -159,13 +195,15 @@ model Patient {
   deletedAt DateTime? @map("deleted_at")
 
   // Relations
-  guardians          Guardian[]
-  appointments       Appointment[]
-  vaccinationRecords VaccinationRecord[]
-  prescriptions      Prescription[]
-  medicalNotes       MedicalNote[]
-  vitalSigns         VitalSign[]
+  guardians                Guardian[]
+  appointments             Appointment[]
+  vaccinationRecords       VaccinationRecord[]
+  prescriptions            Prescription[]
+  medicalNotes             MedicalNote[]
+  vitalSigns               VitalSign[]
   screeningAdministrations ScreeningAdministration[]
+  milestoneObservations    MilestoneObservation[]
+  developmentalConcerns    DevelopmentalConcern[]
 
   @@index([lastName, firstName])
   @@index([mrn])
@@ -237,13 +275,15 @@ model Appointment {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  patient       Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  doctor        User                @relation("DoctorAppointments", fields: [doctorId], references: [id])
-  vitalSign     VitalSign?
-  prescriptions Prescription[]
-  medicalNotes  MedicalNote[]
-  vaccinations  VaccinationRecord[]
-  screenings    ScreeningAdministration[]
+  patient               Patient                   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor                User                      @relation("DoctorAppointments", fields: [doctorId], references: [id])
+  vitalSign             VitalSign?
+  prescriptions         Prescription[]
+  medicalNotes          MedicalNote[]
+  vaccinations          VaccinationRecord[]
+  screenings            ScreeningAdministration[]
+  milestoneObservations MilestoneObservation[]
+  developmentalConcerns DevelopmentalConcern[]
 
   @@index([patientId, scheduledAt])
   @@index([doctorId, scheduledAt])
@@ -290,15 +330,15 @@ model VitalSign {
 // ─────────────────────────────────────────────────────────
 
 model Vaccine {
-  id   String @id @default(cuid())
-  code String @unique // BCG, HEPB, DTAP, MMR, IPV...
-  name String
-  description String?
+  id           String  @id @default(cuid())
+  code         String  @unique // BCG, HEPB, DTAP, MMR, IPV...
+  name         String
+  description  String?
   manufacturer String?
 
-  totalDoses          Int  @default(1) @map("total_doses")
+  totalDoses           Int  @default(1) @map("total_doses")
   recommendedAgeMonths Int? @map("recommended_age_months")
-  intervalDays        Int? @map("interval_days") // days until next dose
+  intervalDays         Int? @map("interval_days") // days until next dose
 
   isActive Boolean @default(true) @map("is_active")
 
@@ -316,15 +356,15 @@ model Vaccine {
 // ─────────────────────────────────────────────────────────
 
 model VaccinationRecord {
-  id             String  @id @default(cuid())
-  patientId      String  @map("patient_id")
-  vaccineId      String  @map("vaccine_id")
-  administeredById String @map("administered_by_id")
-  appointmentId  String? @map("appointment_id")
+  id               String  @id @default(cuid())
+  patientId        String  @map("patient_id")
+  vaccineId        String  @map("vaccine_id")
+  administeredById String  @map("administered_by_id")
+  appointmentId    String? @map("appointment_id")
 
-  doseNumber     Int      @default(1) @map("dose_number")
-  administeredAt DateTime @map("administered_at")
-  batchNumber    String?  @map("batch_number")
+  doseNumber     Int       @default(1) @map("dose_number")
+  administeredAt DateTime  @map("administered_at")
+  batchNumber    String?   @map("batch_number")
   expiryDate     DateTime? @map("expiry_date")
   site           String? // Left deltoid, Right thigh...
   route          String? // IM, SC, Oral
@@ -362,7 +402,7 @@ model Prescription {
   status PrescriptionStatus @default(ACTIVE)
   notes  String?
 
-  issuedAt DateTime  @default(now()) @map("issued_at")
+  issuedAt   DateTime  @default(now()) @map("issued_at")
   validUntil DateTime? @map("valid_until")
 
   createdAt DateTime @default(now()) @map("created_at")
@@ -387,7 +427,7 @@ model PrescriptionItem {
   dosage       String // "250mg", "5ml" — free-text label shown on the printed script
   form         String? // Syrup, Tablet, Drops
   frequency    String // "3x daily", "Every 8 hours"
-  durationDays Int    @map("duration_days")
+  durationDays Int     @map("duration_days")
   quantity     String?
   instructions String? // "Take after meals"
 
@@ -415,8 +455,8 @@ model PrescriptionItem {
 // this table — and, like the milestone checklists, it must be transcribed
 // from a real formulary and version-pinned rather than typed from memory.
 model MedicineDoseReference {
-  id            String @id @default(cuid())
-  genericName   String @unique @map("generic_name")
+  id          String @id @default(cuid())
+  genericName String @unique @map("generic_name")
 
   mgPerKgDayMin   Float  @map("mg_per_kg_day_min")
   mgPerKgDayMax   Float  @map("mg_per_kg_day_max")
@@ -424,7 +464,7 @@ model MedicineDoseReference {
   maxDailyDoseMg  Float? @map("max_daily_dose_mg")
 
   source        String // e.g. "BNF for Children"
-  sourceVersion String @map("source_version") // e.g. "2024"
+  sourceVersion String  @map("source_version") // e.g. "2024"
   notes         String?
 
   isActive  Boolean  @default(true) @map("is_active")
@@ -550,6 +590,98 @@ model ScreeningReferral {
 }
 
 // ─────────────────────────────────────────────────────────
+//  DEVELOPMENTAL SURVEILLANCE — milestones observed every visit
+// ─────────────────────────────────────────────────────────
+//
+// Distinct from screening above: screening is four discrete formal
+// instruments, surveillance is the continuous record built from every
+// well-child visit. Complementary, not a substitute for one another.
+
+// Catalogue. Version-pinned, because the CDC/AAP thresholds moved in 2022
+// (50th to 75th percentile) and will move again — never store bare
+// milestone text without a source and version alongside it.
+model MilestoneDefinition {
+  id                 String          @id @default(cuid())
+  code               String          @unique // "CDC2022_12M_LANG_WAVES"
+  checklistAgeMonths Int             @map("checklist_age_months") // 2 4 6 9 12 15 18 24 30 36 48 60
+  domain             MilestoneDomain
+  description        String // as published — do not paraphrase
+  source             String // "CDC Learn the Signs, Act Early"
+  sourceVersion      String          @map("source_version") // "2022" — the 75th-percentile revision
+  sortOrder          Int             @map("sort_order")
+  isActive           Boolean         @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  observations MilestoneObservation[]
+
+  @@index([checklistAgeMonths, domain])
+  @@map("milestone_definitions")
+}
+
+// One row per milestone per visit. Both ages are stored: a preterm child is
+// judged on corrected age, and the record must show which basis was used.
+model MilestoneObservation {
+  id            String  @id @default(cuid())
+  patientId     String  @map("patient_id")
+  definitionId  String  @map("definition_id")
+  appointmentId String? @map("appointment_id")
+  observedById  String  @map("observed_by_id")
+
+  status MilestoneStatus
+  source ObservationSource @default(CLINICIAN_OBSERVED)
+
+  chronologicalAgeMonths Float    @map("chronological_age_months")
+  correctedAgeMonths     Float?   @map("corrected_age_months") // null when not preterm, or past ~24 months
+  ageBasisUsed           AgeBasis @map("age_basis_used")
+
+  note       String?
+  observedAt DateTime @default(now()) @map("observed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  patient     Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  definition  MilestoneDefinition @relation(fields: [definitionId], references: [id])
+  appointment Appointment?        @relation(fields: [appointmentId], references: [id])
+  observedBy  User                @relation(fields: [observedById], references: [id])
+
+  // One record per milestone per visit — a re-check at a later visit is a
+  // new observedAt, not an overwrite, so the trajectory stays intact.
+  @@unique([patientId, definitionId, observedAt])
+  @@index([patientId, observedAt])
+  @@index([status])
+  @@map("milestone_observations")
+}
+
+// Surveillance is not only milestones. Eliciting and documenting caregiver
+// concern is a named component of it, and needs a home of its own.
+model DevelopmentalConcern {
+  id            String  @id @default(cuid())
+  patientId     String  @map("patient_id")
+  appointmentId String? @map("appointment_id")
+  recordedById  String  @map("recorded_by_id")
+
+  source      ConcernSource
+  domain      MilestoneDomain?
+  description String
+  actionTaken String?          @map("action_taken") // screening triggered, referral, watchful waiting
+  raisedAt    DateTime         @default(now()) @map("raised_at")
+  resolvedAt  DateTime?        @map("resolved_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  patient     Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment Appointment? @relation(fields: [appointmentId], references: [id])
+  recordedBy  User         @relation(fields: [recordedById], references: [id])
+
+  @@index([patientId, raisedAt])
+  @@map("developmental_concerns")
+}
+
+// ─────────────────────────────────────────────────────────
 //  AUDIT LOG — HIPAA-style access trail
 // ─────────────────────────────────────────────────────────
 
@@ -557,12 +689,12 @@ model AuditLog {
   id     String  @id @default(cuid())
   userId String? @map("user_id")
 
-  action     String // CREATE, READ, UPDATE, DELETE, LOGIN
-  entity     String // Patient, Appointment...
-  entityId   String? @map("entity_id")
-  ipAddress  String? @map("ip_address")
-  userAgent  String? @map("user_agent")
-  metadata   Json?
+  action    String // CREATE, READ, UPDATE, DELETE, LOGIN
+  entity    String // Patient, Appointment...
+  entityId  String? @map("entity_id")
+  ipAddress String? @map("ip_address")
+  userAgent String? @map("user_agent")
+  metadata  Json?
 
   createdAt DateTime @default(now()) @map("created_at")
 

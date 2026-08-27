@@ -37,6 +37,8 @@ export type AuditEntity =
   | 'VitalSign'
   | 'ScreeningAdministration'
   | 'ScreeningReferral'
+  | 'MilestoneObservation'
+  | 'DevelopmentalConcern'
   | 'User';
 
 export interface AuditEventDto {

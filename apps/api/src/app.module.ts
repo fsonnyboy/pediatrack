@@ -12,6 +12,7 @@ import { GuardiansModule } from './modules/guardians/guardians.module';
 import { AppointmentsModule } from './modules/appointments/appointments.module';
 import { VaccinationsModule } from './modules/vaccinations/vaccinations.module';
 import { ScreeningsModule } from './modules/screenings/screenings.module';
+import { MilestonesModule } from './modules/milestones/milestones.module';
 import { PrescriptionsModule } from './modules/prescriptions/prescriptions.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 
@@ -68,6 +69,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     AppointmentsModule,
     VaccinationsModule,
     ScreeningsModule,
+    MilestonesModule,
     PrescriptionsModule,
     DashboardModule,
   ],
