@@ -14,6 +14,8 @@ export interface PrescriptionItem {
   durationDays: number;
   quantity?: string | null;
   instructions?: string | null;
+  doseAmountMg?: number | null;
+  dosesPerDay?: number | null;
 }
 
 export interface Prescription {

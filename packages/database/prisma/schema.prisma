@@ -384,12 +384,19 @@ model PrescriptionItem {
 
   medicineName String  @map("medicine_name")
   genericName  String? @map("generic_name")
-  dosage       String // "250mg", "5ml"
+  dosage       String // "250mg", "5ml" — free-text label shown on the printed script
   form         String? // Syrup, Tablet, Drops
   frequency    String // "3x daily", "Every 8 hours"
   durationDays Int    @map("duration_days")
   quantity     String?
   instructions String? // "Take after meals"
+
+  // Structured dose, in mg — optional, but required to run the weight-based
+  // dose check against MedicineDoseReference. `dosage` above stays free text
+  // because concentrations/volumes vary; these two fields are what makes the
+  // dose computable.
+  doseAmountMg Float? @map("dose_amount_mg")
+  dosesPerDay  Int?   @map("doses_per_day")
 
   createdAt DateTime @default(now()) @map("created_at")
 
@@ -397,6 +404,35 @@ model PrescriptionItem {
 
   @@index([prescriptionId])
   @@map("prescription_items")
+}
+
+// ─────────────────────────────────────────────────────────
+//  MEDICINE DOSE REFERENCE — weight-based dosing safety
+// ─────────────────────────────────────────────────────────
+
+// Reference range per generic medicine. Pediatric doses are per-kilogram
+// unlike adult dosing, so a prescription cannot be safety-checked without
+// this table — and, like the milestone checklists, it must be transcribed
+// from a real formulary and version-pinned rather than typed from memory.
+model MedicineDoseReference {
+  id            String @id @default(cuid())
+  genericName   String @unique @map("generic_name")
+
+  mgPerKgDayMin   Float  @map("mg_per_kg_day_min")
+  mgPerKgDayMax   Float  @map("mg_per_kg_day_max")
+  maxSingleDoseMg Float? @map("max_single_dose_mg")
+  maxDailyDoseMg  Float? @map("max_daily_dose_mg")
+
+  source        String // e.g. "BNF for Children"
+  sourceVersion String @map("source_version") // e.g. "2024"
+  notes         String?
+
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive])
+  @@map("medicine_dose_references")
 }
 
 // ─────────────────────────────────────────────────────────

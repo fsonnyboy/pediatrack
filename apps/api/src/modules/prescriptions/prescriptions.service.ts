@@ -39,6 +39,13 @@ export class PrescriptionsService {
       );
     }
 
+    // Weight-based dose check — only runs for items that provided a structured
+    // dose (doseAmountMg + dosesPerDay); free-text-only items can't be checked.
+    const doseViolations = await this.findDoseViolations(patient.id, items);
+    if (doseViolations.length > 0) {
+      throw new BadRequestException(doseViolations.join(' '));
+    }
+
     const prescription = await this.prisma.prescription.create({
       data: {
         ...rest,
@@ -133,6 +140,74 @@ export class PrescriptionsService {
       }
     }
     return [...hits];
+  }
+
+  /**
+   * Checks structured doses (doseAmountMg + dosesPerDay) against
+   * MedicineDoseReference. Items without both fields, medicines without a
+   * reference entry, and reference tables with no active rows are all
+   * skipped rather than blocked — this only rejects what it can actually
+   * compute, it never invents a range.
+   */
+  private async findDoseViolations(
+    patientId: string,
+    items: { medicineName: string; genericName?: string; doseAmountMg?: number; dosesPerDay?: number }[],
+  ): Promise<string[]> {
+    const candidates = items.filter(
+      (item): item is typeof item & { doseAmountMg: number; dosesPerDay: number } =>
+        item.doseAmountMg != null && item.dosesPerDay != null,
+    );
+    if (candidates.length === 0) return [];
+
+    const references = await this.prisma.medicineDoseReference.findMany({ where: { isActive: true } });
+    if (references.length === 0) return [];
+
+    const latestVital = await this.prisma.vitalSign.findFirst({
+      where: { patientId },
+      orderBy: { recordedAt: 'desc' },
+      select: { weightKg: true },
+    });
+    const weightKg = latestVital?.weightKg ?? null;
+
+    const violations: string[] = [];
+    for (const item of candidates) {
+      const nameMatch = (name?: string) => name?.toLowerCase().trim();
+      const reference = references.find(
+        (ref) =>
+          ref.genericName.toLowerCase() === nameMatch(item.genericName) ||
+          ref.genericName.toLowerCase() === nameMatch(item.medicineName),
+      );
+      if (!reference) continue;
+
+      if (weightKg == null) {
+        violations.push(
+          `${item.medicineName} is dosed by weight and this patient has no recorded weight — ` +
+            'record a vital sign before prescribing.',
+        );
+        continue;
+      }
+
+      const dailyMg = item.doseAmountMg * item.dosesPerDay;
+      const mgPerKgDay = dailyMg / weightKg;
+
+      if (mgPerKgDay < reference.mgPerKgDayMin || mgPerKgDay > reference.mgPerKgDayMax) {
+        violations.push(
+          `${item.medicineName}: ${mgPerKgDay.toFixed(1)} mg/kg/day is outside the recommended ` +
+            `${reference.mgPerKgDayMin}–${reference.mgPerKgDayMax} mg/kg/day range (${reference.source} ${reference.sourceVersion}).`,
+        );
+      }
+      if (reference.maxSingleDoseMg != null && item.doseAmountMg > reference.maxSingleDoseMg) {
+        violations.push(
+          `${item.medicineName}: single dose of ${item.doseAmountMg}mg exceeds the maximum single dose of ${reference.maxSingleDoseMg}mg.`,
+        );
+      }
+      if (reference.maxDailyDoseMg != null && dailyMg > reference.maxDailyDoseMg) {
+        violations.push(
+          `${item.medicineName}: total daily dose of ${dailyMg}mg exceeds the maximum daily dose of ${reference.maxDailyDoseMg}mg.`,
+        );
+      }
+    }
+    return violations;
   }
 
   /** Valid until the longest course finishes, plus a week of slack. */

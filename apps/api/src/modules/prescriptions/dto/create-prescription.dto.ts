@@ -1,8 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
-  ArrayMinSize, IsArray, IsDateString, IsEnum, IsInt, IsOptional,
-  IsString, MaxLength, Min, MinLength, ValidateNested,
+  ArrayMinSize, IsArray, IsDateString, IsEnum, IsInt, IsNumber, IsOptional,
+  IsString, Max, MaxLength, Min, MinLength, ValidateNested,
 } from 'class-validator';
 
 export enum PrescriptionStatusEnum {
@@ -43,6 +43,19 @@ export class CreatePrescriptionItemDto {
   @ApiPropertyOptional({ example: 'Take after meals. Shake well before use.' })
   @IsOptional() @IsString() @MaxLength(500)
   instructions?: string;
+
+  @ApiPropertyOptional({
+    example: 250,
+    description:
+      'Amount of one dose, in mg. Provide this and dosesPerDay to run the weight-based dose check ' +
+      'against the medicine reference range — without both, dosage is not machine-checkable.',
+  })
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0.01)
+  doseAmountMg?: number;
+
+  @ApiPropertyOptional({ example: 3, description: 'Number of doses per day, e.g. 3 for "3x daily"' })
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(24)
+  dosesPerDay?: number;
 }
 
 export class CreatePrescriptionDto {

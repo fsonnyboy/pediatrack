@@ -50,6 +50,47 @@ const SCREENING_INSTRUMENTS = [
 ];
 
 /**
+ * Starter weight-based dose ranges for common pediatric prescriptions, keyed
+ * by generic name. Values are the usual maintenance ranges from BNF for
+ * Children 2024 — NOT a substitute for a pharmacist review, and deliberately
+ * narrow: indication-specific regimens (e.g. high-dose amoxicillin for
+ * otitis media) fall outside this range on purpose and should be entered
+ * without a matching structured dose rather than widening the reference.
+ */
+const MEDICINE_DOSE_REFERENCES = [
+  {
+    genericName: 'Amoxicillin',
+    mgPerKgDayMin: 25,
+    mgPerKgDayMax: 45,
+    maxSingleDoseMg: 1000,
+    maxDailyDoseMg: 3000,
+    source: 'BNF for Children',
+    sourceVersion: '2024',
+    notes: 'Standard divided-dose range (e.g. q8h). High-dose regimens (up to 90mg/kg/day) exist for otitis media and are out of scope for this check.',
+  },
+  {
+    genericName: 'Paracetamol',
+    mgPerKgDayMin: 40,
+    mgPerKgDayMax: 60,
+    maxSingleDoseMg: 1000,
+    maxDailyDoseMg: 4000,
+    source: 'BNF for Children',
+    sourceVersion: '2024',
+    notes: 'Usual maintenance range at 10-15mg/kg per dose, up to 4 doses/day.',
+  },
+  {
+    genericName: 'Ibuprofen',
+    mgPerKgDayMin: 20,
+    mgPerKgDayMax: 30,
+    maxSingleDoseMg: 400,
+    maxDailyDoseMg: 2400,
+    source: 'BNF for Children',
+    sourceVersion: '2024',
+    notes: 'Usual maintenance range at 5-10mg/kg per dose, every 6-8 hours. Not for infants under 3 months.',
+  },
+];
+
+/**
  * SEC-017 fix: generate a random, base64url-encoded password for each seed user.
  *
  * The original seed used the hardcoded string "Password123!" which was also
@@ -435,6 +476,16 @@ async function main() {
     });
   }
   console.log(`✅ ${SCREENING_INSTRUMENTS.length} screening instruments seeded`);
+
+  // ── Medicine dose references ─────────────────────────────
+  for (const m of MEDICINE_DOSE_REFERENCES) {
+    await prisma.medicineDoseReference.upsert({
+      where: { genericName: m.genericName },
+      update: {},
+      create: m,
+    });
+  }
+  console.log(`✅ ${MEDICINE_DOSE_REFERENCES.length} medicine dose references seeded`);
 
   // ── Users ─────────────────────────────────────────────
   // SEC-017 fix: generate unique random passwords; print once to stdout only.
