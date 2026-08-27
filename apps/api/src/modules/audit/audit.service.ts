@@ -39,6 +39,7 @@ export type AuditEntity =
   | 'ScreeningReferral'
   | 'MilestoneObservation'
   | 'DevelopmentalConcern'
+  | 'PatientDiagnosis'
   | 'User';
 
 export interface AuditEventDto {

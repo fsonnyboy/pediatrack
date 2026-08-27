@@ -5,6 +5,7 @@ import type {
   ScreeningInstrument, ScreeningAdministration, DueScreening,
   OpenReferral, UnaddressedScreening,
   MilestoneDefinition, PatientMilestones, DevelopmentalConcern, OpenConcern,
+  DiagnosisCodeResult, PatientDiagnosis,
 } from '@peditrack/types';
 
 // ── Auth ────────────────────────────────────────────────
@@ -49,6 +50,7 @@ export const patientsApi = {
   notes: (id: string) => api.get(`/patients/${id}/notes`),
   screenings: (id: string) => api.get<ScreeningAdministration[]>(`/patients/${id}/screenings`),
   milestones: (id: string) => api.get<PatientMilestones>(`/patients/${id}/milestones`),
+  diagnoses: (id: string) => api.get<PatientDiagnosis[]>(`/patients/${id}/diagnoses`),
 };
 
 // ── Appointments ────────────────────────────────────────
@@ -108,6 +110,14 @@ export const milestonesApi = {
   createConcern: (data: unknown) => api.post<DevelopmentalConcern>('/milestones/concerns', data),
   openConcerns: () => api.get<OpenConcern[]>('/milestones/concerns/open'),
   updateConcern: (id: string, data: unknown) => api.patch(`/milestones/concerns/${id}`, data),
+};
+
+// ── Diagnoses ───────────────────────────────────────────
+export const diagnosesApi = {
+  searchCodes: (params: { q?: string; pediatricOnly?: boolean; limit?: number } = {}) =>
+    api.get<DiagnosisCodeResult[]>(`/diagnosis-codes${api.qs(params)}`),
+  create: (data: unknown) => api.post<PatientDiagnosis>('/diagnoses', data),
+  update: (id: string, data: unknown) => api.patch<PatientDiagnosis>(`/diagnoses/${id}`, data),
 };
 
 // ── Prescriptions ───────────────────────────────────────

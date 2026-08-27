@@ -5,5 +5,6 @@ export * from './appointment.types';
 export * from './vaccination.types';
 export * from './screening.types';
 export * from './milestone.types';
+export * from './diagnosis.types';
 export * from './prescription.types';
 export * from './dashboard.types';

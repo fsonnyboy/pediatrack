@@ -121,6 +121,27 @@ enum BloodType {
   UNKNOWN
 }
 
+// Diagnosis coding. `system` is stored alongside every code — never a bare
+// string — so adding SNOMED CT later is a migration, not a rewrite.
+enum CodeSystem {
+  ICD10CM
+  SNOMEDCT
+  ICD11
+}
+
+enum DiagnosisStatus {
+  ACTIVE
+  RESOLVED
+  RULED_OUT
+  CHRONIC
+}
+
+enum DiagnosisCertainty {
+  CONFIRMED
+  PROVISIONAL
+  DIFFERENTIAL
+}
+
 // ─────────────────────────────────────────────────────────
 //  USERS — clinic staff (and future parent accounts)
 // ─────────────────────────────────────────────────────────
@@ -156,6 +177,7 @@ model User {
   screeningsAdministered ScreeningAdministration[]
   milestonesObserved     MilestoneObservation[]
   concernsRecorded       DevelopmentalConcern[]
+  diagnosesRecorded      PatientDiagnosis[]
   auditLogs              AuditLog[]
 
   @@index([email])
@@ -204,6 +226,7 @@ model Patient {
   screeningAdministrations ScreeningAdministration[]
   milestoneObservations    MilestoneObservation[]
   developmentalConcerns    DevelopmentalConcern[]
+  diagnoses                PatientDiagnosis[]
 
   @@index([lastName, firstName])
   @@index([mrn])
@@ -260,6 +283,9 @@ model Appointment {
   status          AppointmentStatus @default(PENDING)
 
   chiefComplaint String? @map("chief_complaint")
+  // Deprecated — unstructured, uncountable, unbillable. Superseded by
+  // PatientDiagnosis (coded, patient-level). Kept for existing records only;
+  // do not write to this field from new code.
   diagnosis      String?
   reasonForVisit String? @map("reason_for_visit")
 
@@ -284,6 +310,7 @@ model Appointment {
   screenings            ScreeningAdministration[]
   milestoneObservations MilestoneObservation[]
   developmentalConcerns DevelopmentalConcern[]
+  diagnoses             PatientDiagnosis[]
 
   @@index([patientId, scheduledAt])
   @@index([doctorId, scheduledAt])
@@ -679,6 +706,74 @@ model DevelopmentalConcern {
 
   @@index([patientId, raisedAt])
   @@map("developmental_concerns")
+}
+
+// ─────────────────────────────────────────────────────────
+//  DIAGNOSIS CODING — replaces free-text Appointment.diagnosis
+// ─────────────────────────────────────────────────────────
+//
+// "Diagnosis is a free-text string" review: Appointment.diagnosis is an
+// unconstrained nullable string, so the same condition ("AOM", "acute otitis
+// media", "R ear infection"...) is stored as unrelated text every time it is
+// typed. Nothing can be counted, searched reliably, or billed from it. These
+// two models replace it: a code catalogue plus a patient-level problem list
+// that survives the appointment it was raised in.
+
+// Catalogue. `system` is what makes this survive adding SNOMED CT later — a
+// bare code column would have to be rewritten instead of extended.
+model DiagnosisCode {
+  id          String     @id @default(cuid())
+  system      CodeSystem // ICD10CM | SNOMEDCT | ICD11
+  code        String // "H66.90"
+  display     String // "Otitis media, unspecified, unspecified ear"
+  isBillable  Boolean    @default(true) @map("is_billable") // ICD-10 has non-billable parent codes
+  isPediatric Boolean    @default(false) @map("is_pediatric") // drives the clinic's short-list
+  searchTerms String[]   @default([]) @map("search_terms") // "AOM", "ear infection" — clinician vocabulary
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  diagnoses PatientDiagnosis[]
+
+  @@unique([system, code])
+  @@index([system, isPediatric])
+  @@map("diagnosis_codes")
+}
+
+// A problem belongs to the patient over time, not to one appointment — this
+// is what makes "is this the fourth ear infection this year" answerable.
+model PatientDiagnosis {
+  id            String  @id @default(cuid())
+  patientId     String  @map("patient_id")
+  codeId        String  @map("code_id")
+  appointmentId String? @map("appointment_id") // where it was made, if applicable
+  diagnosedById String  @map("diagnosed_by_id")
+
+  status    DiagnosisStatus    @default(ACTIVE) // ACTIVE | RESOLVED | RULED_OUT | CHRONIC
+  certainty DiagnosisCertainty @default(CONFIRMED) // CONFIRMED | PROVISIONAL | DIFFERENTIAL
+  isPrimary Boolean            @default(false) @map("is_primary") // the one that drove the encounter
+
+  onsetDate    DateTime? @map("onset_date")
+  resolvedDate DateTime? @map("resolved_date")
+  // Free text is kept, not discarded — it holds nuance no code carries. The
+  // difference from Appointment.diagnosis is that it now sits alongside a
+  // code, not instead of one.
+  clinicalNote String?   @map("clinical_note")
+
+  diagnosedAt DateTime @default(now()) @map("diagnosed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  patient     Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  code        DiagnosisCode @relation(fields: [codeId], references: [id])
+  appointment Appointment?  @relation(fields: [appointmentId], references: [id])
+  diagnosedBy User          @relation(fields: [diagnosedById], references: [id])
+
+  @@index([patientId, diagnosedAt])
+  @@index([codeId, diagnosedAt])
+  @@index([status])
+  @@map("patient_diagnoses")
 }
 
 // ─────────────────────────────────────────────────────────

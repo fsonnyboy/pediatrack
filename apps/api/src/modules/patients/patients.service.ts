@@ -377,6 +377,27 @@ export class PatientsService {
     return { observations, concerns };
   }
 
+  /** Coded problem list — replaces reading free-text Appointment.diagnosis across visits. */
+  async getDiagnoses(id: string, requestingUserId: string) {
+    await this.assertExists(id);
+
+    await this.audit.log({
+      userId: requestingUserId,
+      action: 'READ',
+      entity: 'PatientDiagnosis',
+      detail: `via patient ${id}`,
+    });
+
+    return this.prisma.patientDiagnosis.findMany({
+      where: { patientId: id },
+      orderBy: { diagnosedAt: 'desc' },
+      include: {
+        code: true,
+        diagnosedBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+  }
+
   async getMedicalNotes(id: string, requestingUserId: string) {
     await this.assertExists(id);
 

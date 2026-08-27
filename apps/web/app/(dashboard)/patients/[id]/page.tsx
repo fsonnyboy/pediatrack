@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
-  AlertTriangle, ArrowLeft, Baby, Calendar, ClipboardCheck, Phone, Pill, Plus, Syringe,
-  TrendingUp, User,
+  AlertTriangle, ArrowLeft, Baby, Calendar, ClipboardCheck, ClipboardList, Phone, Pill, Plus,
+  Syringe, TrendingUp, User,
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,6 +18,8 @@ import { GrowthChart } from '@/components/growth/GrowthChart';
 import { useGrowthChart } from '@/hooks/useGrowthChart';
 import { MilestoneChecklistForm } from '@/components/milestones/milestone-checklist-form';
 import { MilestoneConcernForm } from '@/components/milestones/milestone-concern-form';
+import { DiagnosisForm } from '@/components/diagnoses/diagnosis-form';
+import { ProblemList } from '@/components/diagnoses/problem-list';
 import { cn } from '@/lib/utils';
 import { patientsApi } from '@/lib/queries';
 import {
@@ -28,6 +30,7 @@ import type { ScreeningOutcome, MilestoneDomain, MilestoneStatus } from '@peditr
 const TABS = [
   { id: 'overview',      label: 'Overview',      icon: User },
   { id: 'visits',        label: 'Visits',        icon: Calendar },
+  { id: 'diagnoses',     label: 'Diagnoses',     icon: ClipboardList },
   { id: 'vaccinations',  label: 'Vaccinations',  icon: Syringe },
   { id: 'screening',     label: 'Screening',     icon: ClipboardCheck },
   { id: 'milestones',    label: 'Milestones',    icon: Baby },
@@ -64,6 +67,7 @@ export default function PatientProfilePage() {
   const [tab, setTab] = useState<TabId>('overview');
   const [checklistOpen, setChecklistOpen] = useState(false);
   const [concernOpen, setConcernOpen] = useState(false);
+  const [diagnosisOpen, setDiagnosisOpen] = useState(false);
 
   const { data: patient, isLoading } = useQuery({
     queryKey: ['patient', id],
@@ -98,6 +102,12 @@ export default function PatientProfilePage() {
     queryKey: ['patient', id, 'milestones'],
     queryFn: () => patientsApi.milestones(id),
     enabled: tab === 'milestones',
+  });
+
+  const { data: diagnoses } = useQuery({
+    queryKey: ['patient', id, 'diagnoses'],
+    queryFn: () => patientsApi.diagnoses(id),
+    enabled: tab === 'diagnoses',
   });
 
   const {
@@ -301,6 +311,29 @@ export default function PatientProfilePage() {
         </Card>
       )}
 
+      {/* Diagnoses — the coded problem list. Replaces reading free-text
+          diagnosis strings off individual visits: this survives the
+          appointment it was made in and can actually be counted. */}
+      {tab === 'diagnoses' && (
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-sm text-muted-foreground">
+              Coded conditions this patient has been diagnosed with, tracked over time.
+            </p>
+            <Button size="sm" onClick={() => setDiagnosisOpen(true)}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              Add diagnosis
+            </Button>
+          </div>
+
+          <Card>
+            <CardContent className="p-0">
+              <ProblemList patientId={id} diagnoses={diagnoses ?? []} />
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Vaccinations */}
       {tab === 'vaccinations' && (
         <Card>
@@ -488,6 +521,11 @@ export default function PatientProfilePage() {
           <MilestoneConcernForm
             open={concernOpen}
             onClose={() => setConcernOpen(false)}
+            patientId={patient.id}
+          />
+          <DiagnosisForm
+            open={diagnosisOpen}
+            onClose={() => setDiagnosisOpen(false)}
             patientId={patient.id}
           />
         </>

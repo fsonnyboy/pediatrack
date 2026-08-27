@@ -1,6 +1,6 @@
 import {
   PrismaClient, UserRole, Gender, BloodType, AppointmentType, AppointmentStatus, ScreeningType,
-  MilestoneDomain,
+  MilestoneDomain, CodeSystem, DiagnosisStatus, DiagnosisCertainty,
 } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
@@ -399,6 +399,58 @@ const MEDICINE_DOSE_REFERENCES = [
     sourceVersion: '2024',
     notes: 'Usual maintenance range at 5-10mg/kg per dose, every 6-8 hours. Not for infants under 3 months.',
   },
+];
+
+/**
+ * Pediatric short-list of ICD-10-CM diagnosis codes — the conditions a
+ * general pediatric practice sees repeatedly. See the "Diagnosis is a
+ * free-text string" review: this table plus `searchTerms` is what lets a
+ * clinician find a code faster than typing free text, which is the only
+ * thing that gets coded diagnosis actually adopted. Loaded before any full
+ * ICD-10-CM import so this clinic's day-to-day list stays fast to search.
+ *
+ * `system` is stored on every row (not a bare code) so adding SNOMED CT
+ * later is an additional row set, not a schema change.
+ */
+const DIAGNOSIS_CODES: {
+  code: string; display: string; searchTerms: string[]; isBillable?: boolean;
+}[] = [
+  { code: 'J00',       display: 'Acute nasopharyngitis [common cold]',                          searchTerms: ['cold', 'common cold', 'nasopharyngitis', 'URI'] },
+  { code: 'J06.9',     display: 'Acute upper respiratory infection, unspecified',                searchTerms: ['URI', 'upper respiratory infection'] },
+  { code: 'J02.9',     display: 'Acute pharyngitis, unspecified',                                searchTerms: ['sore throat', 'pharyngitis'] },
+  { code: 'J03.90',    display: 'Acute tonsillitis, unspecified',                                searchTerms: ['tonsillitis'] },
+  { code: 'J20.9',     display: 'Acute bronchitis, unspecified',                                 searchTerms: ['bronchitis'] },
+  { code: 'J18.9',     display: 'Pneumonia, unspecified organism',                                searchTerms: ['pneumonia'] },
+  { code: 'H66.90',    display: 'Otitis media, unspecified, unspecified ear',                    searchTerms: ['AOM', 'acute otitis media', 'ear infection', 'ear infxn', 'otitis media'] },
+  { code: 'H65.90',    display: 'Unspecified nonsuppurative otitis media, unspecified ear',      searchTerms: ['otitis media with effusion', 'glue ear', 'OME'] },
+  { code: 'H10.9',     display: 'Unspecified conjunctivitis',                                    searchTerms: ['pink eye', 'conjunctivitis'] },
+  { code: 'J45.909',   display: 'Unspecified asthma, uncomplicated',                             searchTerms: ['asthma'] },
+  { code: 'J45.20',    display: 'Mild intermittent asthma, uncomplicated',                       searchTerms: ['asthma', 'mild intermittent asthma'] },
+  { code: 'J30.9',     display: 'Allergic rhinitis, unspecified',                                searchTerms: ['allergic rhinitis', 'hay fever'] },
+  { code: 'A08.4',     display: 'Viral intestinal infection, unspecified',                       searchTerms: ['viral gastroenteritis', 'stomach flu', 'gastro'] },
+  { code: 'K59.00',    display: 'Constipation, unspecified',                                     searchTerms: ['constipation'] },
+  { code: 'K21.9',     display: 'Gastro-esophageal reflux disease without esophagitis',          searchTerms: ['GERD', 'reflux', 'acid reflux'] },
+  { code: 'R10.9',     display: 'Unspecified abdominal pain',                                    searchTerms: ['stomach ache', 'abdominal pain', 'tummy ache'] },
+  { code: 'R50.9',     display: 'Fever, unspecified',                                            searchTerms: ['fever', 'pyrexia'] },
+  { code: 'R05.9',     display: 'Cough, unspecified',                                            searchTerms: ['cough'] },
+  { code: 'R56.00',    display: 'Simple febrile convulsions',                                    searchTerms: ['febrile seizure', 'febrile convulsion'] },
+  { code: 'L20.9',     display: 'Atopic dermatitis, unspecified',                                searchTerms: ['eczema', 'atopic dermatitis'] },
+  { code: 'L30.9',     display: 'Dermatitis, unspecified',                                       searchTerms: ['rash', 'dermatitis'] },
+  { code: 'L22',       display: 'Diaper dermatitis',                                             searchTerms: ['diaper rash', 'nappy rash'] },
+  { code: 'B37.9',     display: 'Candidiasis, unspecified',                                      searchTerms: ['thrush', 'yeast infection', 'candidiasis'] },
+  { code: 'B01.9',     display: 'Varicella without complication',                                searchTerms: ['chickenpox', 'varicella'] },
+  { code: 'B08.4',     display: 'Enteroviral vesicular stomatitis with exanthem',                searchTerms: ['hand foot and mouth', 'hand foot mouth', 'HFMD'] },
+  { code: 'N39.0',     display: 'Urinary tract infection, site not specified',                   searchTerms: ['UTI', 'urinary tract infection'] },
+  { code: 'D50.9',     display: 'Iron deficiency anemia, unspecified',                           searchTerms: ['anemia', 'iron deficiency'] },
+  { code: 'E55.9',     display: 'Vitamin D deficiency, unspecified',                             searchTerms: ['vitamin D deficiency'] },
+  { code: 'E66.9',     display: 'Obesity, unspecified',                                          searchTerms: ['obesity', 'overweight'] },
+  { code: 'F90.9',     display: 'Attention-deficit hyperactivity disorder, unspecified type',    searchTerms: ['ADHD', 'attention deficit'] },
+  { code: 'F80.9',     display: 'Developmental disorder of speech and language, unspecified',    searchTerms: ['speech delay', 'language delay'] },
+  { code: 'R62.50',    display: 'Unspecified lack of expected normal physiological development in childhood', searchTerms: ['developmental delay', 'global delay'] },
+  { code: 'P59.9',     display: 'Neonatal jaundice, unspecified',                                searchTerms: ['jaundice', 'newborn jaundice'] },
+  { code: 'S00.93XA',  display: 'Contusion of unspecified part of head, initial encounter',      searchTerms: ['head bump', 'bruise', 'contusion'] },
+  { code: 'Z00.129',   display: 'Encounter for routine child health examination without abnormal findings', searchTerms: ['well child', 'checkup', 'annual physical'] },
+  { code: 'Z23',       display: 'Encounter for immunization',                                    searchTerms: ['vaccination visit', 'immunization'] },
 ];
 
 /**
@@ -821,6 +873,23 @@ async function main() {
   }
   console.log(`✅ ${MEDICINE_DOSE_REFERENCES.length} medicine dose references seeded`);
 
+  // ── Diagnosis codes ───────────────────────────────────
+  for (const d of DIAGNOSIS_CODES) {
+    await prisma.diagnosisCode.upsert({
+      where: { system_code: { system: CodeSystem.ICD10CM, code: d.code } },
+      update: {},
+      create: {
+        system: CodeSystem.ICD10CM,
+        code: d.code,
+        display: d.display,
+        searchTerms: d.searchTerms,
+        isBillable: d.isBillable ?? true,
+        isPediatric: true,
+      },
+    });
+  }
+  console.log(`✅ ${DIAGNOSIS_CODES.length} diagnosis codes seeded (ICD-10-CM pediatric short-list)`);
+
   // ── Users ─────────────────────────────────────────────
   // SEC-017 fix: generate unique random passwords; print once to stdout only.
   const credentials: Array<{ role: string; email: string; password: string }> = [];
@@ -938,6 +1007,52 @@ async function main() {
       ],
     });
     console.log('✅ 5 appointments seeded');
+  }
+
+  // ── Patient diagnoses ─────────────────────────────────
+  // Demonstrates the coded problem list: Emma's asthma follow-up gets a real
+  // coded, patient-level diagnosis instead of a free-text guess, and Liam
+  // gets a resolved past episode — showing that a code plus status survives
+  // the appointment it was made in.
+  if ((await prisma.patientDiagnosis.count()) === 0) {
+    const [asthmaCode, aomCode] = await Promise.all([
+      prisma.diagnosisCode.findUnique({ where: { system_code: { system: CodeSystem.ICD10CM, code: 'J45.909' } } }),
+      prisma.diagnosisCode.findUnique({ where: { system_code: { system: CodeSystem.ICD10CM, code: 'H66.90' } } }),
+    ]);
+    const followUpAppt = await prisma.appointment.findFirst({
+      where: { patientId: createdPatients[3].id, chiefComplaint: 'Follow-up on asthma management' },
+    });
+
+    if (asthmaCode) {
+      await prisma.patientDiagnosis.create({
+        data: {
+          patientId: createdPatients[3].id, // Emma
+          codeId: asthmaCode.id,
+          appointmentId: followUpAppt?.id,
+          diagnosedById: doctor.id,
+          status: DiagnosisStatus.CHRONIC,
+          certainty: DiagnosisCertainty.CONFIRMED,
+          isPrimary: true,
+          onsetDate: yearsAgo(2),
+        },
+      });
+    }
+    if (aomCode) {
+      await prisma.patientDiagnosis.create({
+        data: {
+          patientId: createdPatients[0].id, // Liam
+          codeId: aomCode.id,
+          diagnosedById: doctor.id,
+          status: DiagnosisStatus.RESOLVED,
+          certainty: DiagnosisCertainty.CONFIRMED,
+          isPrimary: true,
+          onsetDate: yearsAgo(0, 4),
+          resolvedDate: yearsAgo(0, 3),
+          clinicalNote: 'Treated with an amoxicillin alternative given the penicillin allergy on file.',
+        },
+      });
+    }
+    console.log('✅ Example patient diagnoses seeded');
   }
 
   // ── Vaccination records ───────────────────────────────
