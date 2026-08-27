@@ -368,7 +368,19 @@ const MILESTONE_DEFINITIONS = MILESTONE_CHECKLIST_DATA.flatMap((group, groupIdx)
  * otitis media) fall outside this range on purpose and should be entered
  * without a matching structured dose rather than widening the reference.
  */
-const MEDICINE_DOSE_REFERENCES = [
+const MEDICINE_DOSE_REFERENCES: {
+  genericName: string;
+  ageMinMonths?: number | null;
+  ageMaxMonths?: number | null;
+  indication?: string | null;
+  mgPerKgDayMin: number;
+  mgPerKgDayMax: number;
+  maxSingleDoseMg: number;
+  maxDailyDoseMg: number;
+  source: string;
+  sourceVersion: string;
+  notes?: string;
+}[] = [
   {
     genericName: 'Amoxicillin',
     mgPerKgDayMin: 25,
@@ -864,12 +876,24 @@ async function main() {
   );
 
   // ── Medicine dose references ─────────────────────────────
+  // genericName is no longer unique (a drug can have several rows across
+  // different age bands / indications — see the model comment), so there's
+  // no single-column `where` an upsert can key on. Match on the natural key
+  // (name + age band + indication) instead and update/create by id.
   for (const m of MEDICINE_DOSE_REFERENCES) {
-    await prisma.medicineDoseReference.upsert({
-      where: { genericName: m.genericName },
-      update: {},
-      create: m,
+    const existing = await prisma.medicineDoseReference.findFirst({
+      where: {
+        genericName: m.genericName,
+        ageMinMonths: m.ageMinMonths ?? null,
+        ageMaxMonths: m.ageMaxMonths ?? null,
+        indication: m.indication ?? null,
+      },
     });
+    if (existing) {
+      await prisma.medicineDoseReference.update({ where: { id: existing.id }, data: {} });
+    } else {
+      await prisma.medicineDoseReference.create({ data: m });
+    }
   }
   console.log(`✅ ${MEDICINE_DOSE_REFERENCES.length} medicine dose references seeded`);
 

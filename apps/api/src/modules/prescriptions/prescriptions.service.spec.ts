@@ -373,6 +373,84 @@ describe('PrescriptionsService', () => {
     expect(prisma.medicineDoseReference.count).toHaveBeenCalledWith({ where: { isActive: true } });
   });
 
+  it('reports dose check status as inactive when the reference table is empty', async () => {
+    prisma.medicineDoseReference.count.mockResolvedValue(0);
+    await expect(service.getDoseCheckStatus()).resolves.toEqual({
+      active: false,
+      activeReferenceCount: 0,
+    });
+  });
+
+  it('reports dose check status as active when the reference table has rows', async () => {
+    prisma.medicineDoseReference.count.mockResolvedValue(3);
+    await expect(service.getDoseCheckStatus()).resolves.toEqual({
+      active: true,
+      activeReferenceCount: 3,
+    });
+  });
+
+  // ── D5: indication-scoped reference rows ─────────────────────────────
+
+  it('prefers an indication-specific row over the general fallback when the item names that indication', async () => {
+    prisma.patient.findFirst.mockResolvedValue({
+      id: 'p1', mrn: 'PT-2026-00001', allergies: [], dateOfBirth: NON_INFANT_DOB,
+    });
+    prisma.medicineDoseReference.findMany.mockResolvedValue([
+      { ...AMOXICILLIN_REF, mgPerKgDayMin: 25, mgPerKgDayMax: 45 }, // general fallback
+      {
+        ...AMOXICILLIN_REF,
+        indication: 'otitis media',
+        mgPerKgDayMin: 80, mgPerKgDayMax: 90, // high-dose regimen for this indication only
+      },
+    ]);
+    prisma.vitalSign.findFirst.mockResolvedValue({ weightKg: 10, recordedAt: daysAgo(1) });
+    prisma.prescription.create.mockResolvedValue({ id: 'rx1' });
+
+    // 850mg x 1/day on 10kg = 85 mg/kg/day — inside the otitis-media band, outside
+    // the general fallback. Only passes if the indication-specific row was selected.
+    const result = await service.create(
+      {
+        patientId: 'p1',
+        items: [{
+          ...baseItem,
+          dosage: '850mg/5ml',
+          doseAmountMg: 850,
+          dosesPerDay: 1,
+          indication: 'Otitis Media',
+        }],
+      },
+      'doc1',
+    );
+    expect(result.id).toBe('rx1');
+  });
+
+  it('does not apply an indication-specific row when the item names a different or no indication', async () => {
+    prisma.patient.findFirst.mockResolvedValue({
+      id: 'p1', mrn: 'PT-2026-00001', allergies: [], dateOfBirth: NON_INFANT_DOB,
+    });
+    prisma.medicineDoseReference.findMany.mockResolvedValue([
+      {
+        ...AMOXICILLIN_REF,
+        indication: 'otitis media',
+        mgPerKgDayMin: 80, mgPerKgDayMax: 90,
+      },
+    ]);
+    prisma.vitalSign.findFirst.mockResolvedValue({ weightKg: 10, recordedAt: daysAgo(1) });
+
+    // 850mg/day on 10kg = 85 mg/kg/day — would pass the otitis-media band, but
+    // nothing else is applicable without that indication, so no reference matches
+    // and the dose is skipped rather than checked against an unrelated regimen.
+    prisma.prescription.create.mockResolvedValue({ id: 'rx1' });
+    const result = await service.create(
+      {
+        patientId: 'p1',
+        items: [{ ...baseItem, dosage: '850mg/5ml', doseAmountMg: 850, dosesPerDay: 1 }],
+      },
+      'doc1',
+    );
+    expect(result.id).toBe('rx1');
+  });
+
   // ── D6: re-checking on update ────────────────────────────────────────
 
   describe('updateItems', () => {

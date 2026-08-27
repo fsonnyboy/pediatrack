@@ -51,6 +51,14 @@ export class PrescriptionsService implements OnModuleInit {
     }
   }
 
+  /** Lets the prescribing UI warn staff when the dose check cannot run for anyone. */
+  async getDoseCheckStatus() {
+    const activeReferenceCount = await this.prisma.medicineDoseReference.count({
+      where: { isActive: true },
+    });
+    return { active: activeReferenceCount > 0, activeReferenceCount };
+  }
+
   async create(dto: CreatePrescriptionDto, doctorId: string) {
     const patient = await this.prisma.patient.findFirst({
       where: { id: dto.patientId, deletedAt: null },
@@ -283,8 +291,8 @@ export class PrescriptionsService implements OnModuleInit {
     for (const item of candidates) {
       const matches = this.matchReferences(references, item);
       if (matches.length === 0) continue;
-      const reference = this.selectNarrowestReference(matches, ageMonths);
-      if (!reference) continue; // named drug matched, but no row covers this patient's age
+      const reference = this.selectNarrowestReference(matches, ageMonths, item.indication);
+      if (!reference) continue; // named drug matched, but no row covers this patient's age/indication
 
       if (weightKg == null) {
         violations.push(
@@ -362,25 +370,40 @@ export class PrescriptionsService implements OnModuleInit {
   }
 
   /**
-   * Among rows for the same drug, picks the one whose age band both covers
-   * the patient and is narrowest — a row with explicit bounds is more
-   * specific than the null-bound fallback, so it wins when both apply.
+   * Among rows for the same drug, picks the one whose age band covers the
+   * patient and whose indication is the best match. A row with a non-null
+   * indication only applies when the prescribed item names that exact
+   * indication; a row with a null indication is the general fallback and
+   * always applies. Among applicable rows, an indication-specific match
+   * always wins over the fallback, and — within the same specificity — the
+   * narrowest age band wins, since explicit bounds are more specific than
+   * the null-bound "any age" row.
    */
   private selectNarrowestReference(
     matches: MedicineDoseReference[],
     ageMonths: number,
+    indication?: string,
   ): MedicineDoseReference | null {
-    const applicable = matches.filter(
-      (ref) =>
+    const normalizedIndication = indication?.toLowerCase().trim() || null;
+
+    const applicable = matches.filter((ref) => {
+      const ageOk =
         (ref.ageMinMonths == null || ageMonths >= ref.ageMinMonths) &&
-        (ref.ageMaxMonths == null || ageMonths <= ref.ageMaxMonths),
-    );
+        (ref.ageMaxMonths == null || ageMonths <= ref.ageMaxMonths);
+      if (!ageOk) return false;
+      if (ref.indication == null) return true;
+      return normalizedIndication != null && ref.indication.toLowerCase().trim() === normalizedIndication;
+    });
     if (applicable.length === 0) return null;
 
-    return applicable.reduce((narrowest, ref) => {
+    return applicable.reduce((best, ref) => {
+      const refSpecific = ref.indication != null;
+      const bestSpecific = best.indication != null;
+      if (refSpecific !== bestSpecific) return refSpecific ? ref : best;
+
       const width = (ref.ageMaxMonths ?? Infinity) - (ref.ageMinMonths ?? -Infinity);
-      const narrowestWidth = (narrowest.ageMaxMonths ?? Infinity) - (narrowest.ageMinMonths ?? -Infinity);
-      return width < narrowestWidth ? ref : narrowest;
+      const bestWidth = (best.ageMaxMonths ?? Infinity) - (best.ageMinMonths ?? -Infinity);
+      return width < bestWidth ? ref : best;
     });
   }
 

@@ -128,6 +128,8 @@ export const prescriptionsApi = {
   create: (data: unknown) => api.post<Prescription>('/prescriptions', data),
   setStatus: (id: string, status: string) =>
     api.patch(`/prescriptions/${id}/status`, { status }),
+  doseCheckStatus: () =>
+    api.get<{ active: boolean; activeReferenceCount: number }>('/prescriptions/dose-check-status'),
 };
 
 // ── Users ───────────────────────────────────────────────

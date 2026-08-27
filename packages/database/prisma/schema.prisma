@@ -465,6 +465,12 @@ model PrescriptionItem {
   doseAmountMg Float? @map("dose_amount_mg")
   dosesPerDay  Int?   @map("doses_per_day")
 
+  // What this medicine is being given for, e.g. "otitis media" — lets the
+  // dose check select a MedicineDoseReference row scoped to that indication
+  // over the general fallback for the same drug. Null means "not specified",
+  // which can only match a reference row that is itself indication-agnostic.
+  indication String? @map("indication")
+
   createdAt DateTime @default(now()) @map("created_at")
 
   prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)

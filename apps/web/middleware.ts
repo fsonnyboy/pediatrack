@@ -15,6 +15,17 @@
  * This two-layer approach means:
  *  - Unauthenticated users never see a dashboard flash before redirect.
  *  - The API remains the authoritative auth enforcer (single source of truth).
+ *
+ * Note: middleware deliberately does NOT redirect an already-authenticated
+ * visitor away from /login, because "authenticated" here only means
+ * "has a cookie" — not "has a valid one". Bouncing on presence alone caused
+ * an infinite redirect loop whenever the cookie was stale (expired, revoked
+ * by a logout/password-change elsewhere, etc.): the dashboard would detect
+ * the invalid session and send the user to /login, middleware would see the
+ * (still-present, still-invalid) cookie and bounce them back to /, which
+ * redirects to /dashboard, which fails auth again — forever. The login page
+ * itself handles the "already have a valid session" redirect, using the
+ * validated /auth/me result instead of raw cookie presence.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -47,14 +58,6 @@ export function middleware(req: NextRequest) {
     // Preserve the intended destination so we can redirect back after login.
     loginUrl.searchParams.set('from', pathname);
     return NextResponse.redirect(loginUrl);
-  }
-
-  // ── Already-authenticated visitor hitting the login page ──────────────
-  if (hasAuthCookie && isPublicPath) {
-    const homeUrl = req.nextUrl.clone();
-    homeUrl.pathname = '/';
-    homeUrl.search = '';
-    return NextResponse.redirect(homeUrl);
   }
 
   return NextResponse.next();

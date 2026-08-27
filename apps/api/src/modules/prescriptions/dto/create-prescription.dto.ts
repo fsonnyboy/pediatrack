@@ -56,6 +56,15 @@ export class CreatePrescriptionItemDto {
   @ApiPropertyOptional({ example: 3, description: 'Number of doses per day, e.g. 3 for "3x daily"' })
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(24)
   dosesPerDay?: number;
+
+  @ApiPropertyOptional({
+    example: 'otitis media',
+    description:
+      'What this medicine is being given for. When a MedicineDoseReference row is scoped to this ' +
+      'indication, the dose check prefers it over the general range for the same drug.',
+  })
+  @IsOptional() @IsString() @MaxLength(150)
+  indication?: string;
 }
 
 export class CreatePrescriptionDto {

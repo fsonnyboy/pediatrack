@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Pill } from 'lucide-react';
+import { Pill, TriangleAlert } from 'lucide-react';
 
 import { PageHeader } from '@/components/shared/page-header';
 import { Card } from '@/components/ui/card';
@@ -24,11 +24,31 @@ export default function PrescriptionsPage() {
     queryFn: () => prescriptionsApi.list({ status, page, limit: 20 }),
   });
 
+  const { data: doseCheckStatus } = useQuery({
+    queryKey: ['prescriptions', 'dose-check-status'],
+    queryFn: () => prescriptionsApi.doseCheckStatus(),
+    staleTime: 60_000,
+  });
+
   const prescriptions = data?.data ?? [];
   const meta = data?.meta;
 
   return (
     <div>
+      {doseCheckStatus && !doseCheckStatus.active && (
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-amber-700 dark:text-amber-400">
+          <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <div className="text-sm">
+            <p className="font-bold">Weight-based dose checking is not running</p>
+            <p className="mt-0.5 text-amber-700/90 dark:text-amber-400/90">
+              The medicine dose reference table has no active rows, so no prescription is being
+              checked against a mg/kg/day range right now. Populate it from a licensed reference
+              before relying on this check.
+            </p>
+          </div>
+        </div>
+      )}
+
       <PageHeader
         title="Prescriptions"
         description="Medicines prescribed across the clinic."

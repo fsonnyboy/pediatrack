@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -23,7 +23,22 @@ type LoginForm = z.infer<typeof loginSchema>;
 export default function LoginPage() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
+  const user = useAuthStore((s) => s.user);
+  const isInitialized = useAuthStore((s) => s.isInitialized);
+  const loadSession = useAuthStore((s) => s.loadSession);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Middleware only knows the cookie is present, not whether it's still
+  // valid, so it can't safely redirect away from /login by itself (see
+  // middleware.ts). Do that redirect here instead, only once the session
+  // has been validated against the API.
+  useEffect(() => {
+    if (!isInitialized) void loadSession();
+  }, [isInitialized, loadSession]);
+
+  useEffect(() => {
+    if (isInitialized && user) router.replace('/dashboard');
+  }, [isInitialized, user, router]);
 
   const {
     register,

@@ -29,6 +29,15 @@ export class PrescriptionsController {
     return this.prescriptionsService.findAll(query);
   }
 
+  @Get('dose-check-status')
+  @ApiOperation({
+    summary: 'Whether MedicineDoseReference has any active rows — the weight-based dose check ' +
+      'silently skips every prescription when it does not',
+  })
+  getDoseCheckStatus() {
+    return this.prescriptionsService.getDoseCheckStatus();
+  }
+
   @Get(':id')
   @ApiOperation({ summary: 'Prescription with all its medicines' })
   findOne(@Param('id') id: string) {
