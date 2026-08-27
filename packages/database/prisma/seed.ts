@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, Gender, BloodType, AppointmentType, AppointmentStatus } from '@prisma/client';
+import { PrismaClient, UserRole, Gender, BloodType, AppointmentType, AppointmentStatus, ScreeningType } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 
@@ -21,6 +21,32 @@ const VACCINES = [
   { code: 'HEPA',   name: 'Hepatitis A',                   totalDoses: 2, recommendedAgeMonths: 12, intervalDays: 180,  description: 'Two doses six months apart.' },
   { code: 'FLU',    name: 'Influenza (Annual)',            totalDoses: 1, recommendedAgeMonths: 6,  intervalDays: 365,  description: 'Given annually from 6 months of age.' },
   { code: 'TYPH',   name: 'Typhoid',                       totalDoses: 1, recommendedAgeMonths: 24, intervalDays: 1095, description: 'Recommended in endemic areas.' },
+];
+
+/**
+ * Free-to-use developmental screening instruments only. ASQ-3 and PEDS are
+ * licensed and are deliberately excluded until a licensing agreement is in
+ * place — see the screening implementation plan.
+ */
+const SCREENING_INSTRUMENTS = [
+  {
+    code: 'MCHAT_R_F',
+    name: 'M-CHAT-R/F',
+    type: ScreeningType.AUTISM,
+    minAgeMonths: 16,
+    maxAgeMonths: 30,
+    cutoffNote:
+      '0–2 low risk (pass) · 3–7 medium risk (administer follow-up interview, refer if still ≥2) · 8–20 high risk (refer directly)',
+  },
+  {
+    code: 'SWYC',
+    name: 'Survey of Wellbeing of Young Children',
+    type: ScreeningType.GENERAL,
+    minAgeMonths: 1,
+    maxAgeMonths: 65,
+    cutoffNote:
+      'Age-banded milestone cutoffs per SWYC form; below cutoff on any domain = monitor/refer per clinical judgement',
+  },
 ];
 
 /**
@@ -399,6 +425,16 @@ async function main() {
     });
   }
   console.log(`✅ ${VACCINES.length} vaccines seeded`);
+
+  // ── Screening instruments ───────────────────────────────
+  for (const s of SCREENING_INSTRUMENTS) {
+    await prisma.screeningInstrument.upsert({
+      where: { code: s.code },
+      update: {},
+      create: s,
+    });
+  }
+  console.log(`✅ ${SCREENING_INSTRUMENTS.length} screening instruments seeded`);
 
   // ── Users ─────────────────────────────────────────────
   // SEC-017 fix: generate unique random passwords; print once to stdout only.

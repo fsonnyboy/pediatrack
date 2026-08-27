@@ -211,6 +211,27 @@ export class PatientsService {
     });
   }
 
+  async getScreenings(id: string, requestingUserId: string) {
+    await this.assertExists(id);
+
+    await this.audit.log({
+      userId: requestingUserId,
+      action: 'READ',
+      entity: 'ScreeningAdministration',
+      detail: `via patient ${id}`,
+    });
+
+    return this.prisma.screeningAdministration.findMany({
+      where: { patientId: id },
+      orderBy: { administeredAt: 'desc' },
+      include: {
+        instrument: true,
+        referral: true,
+        administeredBy: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+  }
+
   async getPrescriptions(id: string, requestingUserId: string) {
     await this.assertExists(id);
 

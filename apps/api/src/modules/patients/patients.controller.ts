@@ -83,6 +83,15 @@ export class PatientsController {
     return this.patientsService.getVaccinations(id, user.id);
   }
 
+  // Screening results are sensitive even by PHI standards — restrict to
+  // clinical staff, excluding RECEPTIONIST (unlike vaccinations/growth-chart below).
+  @Get(':id/screenings')
+  @Roles('ADMIN', 'DOCTOR', 'NURSE')
+  @ApiOperation({ summary: 'Developmental screening history for a patient' })
+  getScreenings(@Param('id') id: string, @CurrentUser() user: AuthUser) {
+    return this.patientsService.getScreenings(id, user.id);
+  }
+
   // SEC-005 fix: prescriptions contain sensitive PHI — restrict to clinical staff.
   @Get(':id/prescriptions')
   @Roles('ADMIN', 'DOCTOR', 'NURSE')

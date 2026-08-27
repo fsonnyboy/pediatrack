@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
-  AlertTriangle, CalendarCheck, CalendarClock, Pill, Syringe, UserPlus, Users,
+  AlertTriangle, CalendarCheck, CalendarClock, ClipboardCheck, Pill, Syringe, UserPlus, Users,
 } from 'lucide-react';
 
 import { PageHeader } from '@/components/shared/page-header';
@@ -172,10 +172,24 @@ export default function DashboardPage() {
       </div>
 
       {!statsLoading && stats && (
-        <div className="mt-5 grid gap-4 sm:grid-cols-3">
+        <div className="mt-5 grid gap-4 sm:grid-cols-3 xl:grid-cols-5">
           <StatCard label="Pending confirmations" value={stats.pendingAppointments} icon={CalendarClock} tone="warning" />
           <StatCard label="This week" value={stats.appointmentsThisWeek} icon={CalendarCheck} />
           <StatCard label="Active prescriptions" value={stats.activePrescriptions} icon={Pill} tone="accent" />
+          <StatCard
+            label="Screenings due soon"
+            value={stats.screeningsDueSoon}
+            icon={ClipboardCheck}
+            tone="warning"
+            hint="Within the next 30 days"
+          />
+          <StatCard
+            label="Overdue screenings"
+            value={stats.screeningsOverdue}
+            icon={AlertTriangle}
+            tone={stats.screeningsOverdue ? 'danger' : 'default'}
+            hint="Needs follow-up"
+          />
         </div>
       )}
     </div>

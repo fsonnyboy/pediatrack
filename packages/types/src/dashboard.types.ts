@@ -10,6 +10,8 @@ export interface DashboardStats {
   completedToday: number;
   vaccinesDueSoon: number;
   vaccinesOverdue: number;
+  screeningsDueSoon: number;
+  screeningsOverdue: number;
   activePrescriptions: number;
 }
 

@@ -5,11 +5,11 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
-  AlertTriangle, ArrowLeft, Calendar, Phone, Pill, Syringe, TrendingUp, User,
+  AlertTriangle, ArrowLeft, Calendar, ClipboardCheck, Phone, Pill, Syringe, TrendingUp, User,
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge, StatusBadge } from '@/components/ui/badge';
+import { Badge, StatusBadge, type BadgeProps } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { GrowthChart } from '@/components/growth/GrowthChart';
@@ -19,14 +19,23 @@ import { patientsApi } from '@/lib/queries';
 import {
   calculateAge, formatBloodType, formatDate, formatDateTime, formatPhone, fullName,
 } from '@peditrack/utils';
+import type { ScreeningOutcome } from '@peditrack/types';
 
 const TABS = [
   { id: 'overview',      label: 'Overview',      icon: User },
   { id: 'visits',        label: 'Visits',        icon: Calendar },
   { id: 'vaccinations',  label: 'Vaccinations',  icon: Syringe },
+  { id: 'screening',     label: 'Screening',     icon: ClipboardCheck },
   { id: 'prescriptions', label: 'Prescriptions', icon: Pill },
   { id: 'growth',        label: 'Growth',        icon: TrendingUp },
 ] as const;
+
+const OUTCOME_BADGE: Record<ScreeningOutcome, { variant: BadgeProps['variant']; label: string }> = {
+  PASS: { variant: 'success', label: 'Pass' },
+  MONITOR: { variant: 'warning', label: 'Monitor' },
+  REFER: { variant: 'danger', label: 'Refer' },
+  INCOMPLETE: { variant: 'neutral', label: 'Incomplete' },
+};
 
 type TabId = (typeof TABS)[number]['id'];
 
@@ -55,6 +64,12 @@ export default function PatientProfilePage() {
     queryKey: ['patient', id, 'prescriptions'],
     queryFn: () => patientsApi.prescriptions(id),
     enabled: tab === 'prescriptions',
+  });
+
+  const { data: screenings } = useQuery({
+    queryKey: ['patient', id, 'screenings'],
+    queryFn: () => patientsApi.screenings(id),
+    enabled: tab === 'screening',
   });
 
   const {
@@ -281,6 +296,59 @@ export default function PatientProfilePage() {
                     </div>
                     {record.nextDueDate && (
                       <Badge variant="warning">Next dose {formatDate(record.nextDueDate)}</Badge>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Screening */}
+      {tab === 'screening' && (
+        <Card>
+          <CardContent className="p-0">
+            {!screenings?.length ? (
+              <EmptyState
+                icon={ClipboardCheck}
+                title="No screenings recorded"
+                description="Developmental screening results will appear here once administered."
+              />
+            ) : (
+              <ul className="divide-y divide-border">
+                {screenings.map((s) => (
+                  <li key={s.id} className="px-5 py-4">
+                    <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold">
+                        {s.instrument?.name}{' '}
+                        <span className="tabular text-muted-foreground">
+                          · {s.scheduledAgeMonths}mo checkpoint
+                        </span>
+                      </p>
+                      <Badge variant={OUTCOME_BADGE[s.outcome].variant}>
+                        {OUTCOME_BADGE[s.outcome].label}
+                      </Badge>
+                    </div>
+                    <p className="tabular text-xs text-muted-foreground">
+                      Administered {formatDate(s.administeredAt)}
+                      {s.totalScore != null && ` · Score ${s.totalScore}`}
+                    </p>
+                    {s.concernNote && (
+                      <p className="mt-1.5 text-sm text-muted-foreground">{s.concernNote}</p>
+                    )}
+                    {s.outcome === 'REFER' && (
+                      <div className="mt-2">
+                        {s.referral ? (
+                          <Badge variant="outline">
+                            Referred to {s.referral.referredTo} · {s.referral.status.toLowerCase()}
+                          </Badge>
+                        ) : (
+                          <Link href="/screenings/referrals" className="inline-block">
+                            <Badge variant="danger">No referral on file — open one</Badge>
+                          </Link>
+                        )}
+                      </div>
                     )}
                   </li>
                 ))}

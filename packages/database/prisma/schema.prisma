@@ -54,6 +54,27 @@ enum PrescriptionStatus {
   CANCELLED
 }
 
+enum ScreeningType {
+  GENERAL
+  AUTISM
+  BEHAVIORAL
+}
+
+enum ScreeningOutcome {
+  PASS
+  MONITOR
+  REFER
+  INCOMPLETE
+}
+
+enum ReferralStatus {
+  PENDING
+  SCHEDULED
+  COMPLETED
+  DECLINED
+  LOST
+}
+
 enum BloodType {
   A_POSITIVE
   A_NEGATIVE
@@ -98,6 +119,7 @@ model User {
   prescriptionsIssued  Prescription[]
   medicalNotes         MedicalNote[]
   vitalSignsRecorded   VitalSign[]
+  screeningsAdministered ScreeningAdministration[]
   auditLogs            AuditLog[]
 
   @@index([email])
@@ -143,6 +165,7 @@ model Patient {
   prescriptions      Prescription[]
   medicalNotes       MedicalNote[]
   vitalSigns         VitalSign[]
+  screeningAdministrations ScreeningAdministration[]
 
   @@index([lastName, firstName])
   @@index([mrn])
@@ -220,6 +243,7 @@ model Appointment {
   prescriptions Prescription[]
   medicalNotes  MedicalNote[]
   vaccinations  VaccinationRecord[]
+  screenings    ScreeningAdministration[]
 
   @@index([patientId, scheduledAt])
   @@index([doctorId, scheduledAt])
@@ -402,6 +426,91 @@ model MedicalNote {
 
   @@index([patientId, createdAt])
   @@map("medical_notes")
+}
+
+// ─────────────────────────────────────────────────────────
+//  DEVELOPMENTAL SCREENING — structured, validated-instrument
+//  screening events (AAP/Bright Futures periodicity: 9, 18,
+//  24, 30 months). Distinct from free-text surveillance notes
+//  in MedicalNote — this is queryable, due-date-tracked, and
+//  loop-closing via ScreeningReferral.
+// ─────────────────────────────────────────────────────────
+
+// Screening instrument catalogue. Item text is deliberately NOT stored — a
+// licensed instrument's items generally cannot be reproduced, and even for a
+// free instrument this app stores scores/outcomes, not the questionnaire itself.
+model ScreeningInstrument {
+  id           String        @id @default(cuid())
+  code         String        @unique // "MCHAT_R_F", "SWYC"
+  name         String
+  type         ScreeningType
+  minAgeMonths Int           @map("min_age_months")
+  maxAgeMonths Int           @map("max_age_months")
+  cutoffNote   String?       @map("cutoff_note") // scoring-band guidance for the UI
+  isActive     Boolean       @default(true) @map("is_active")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  administrations ScreeningAdministration[]
+
+  @@index([type])
+  @@map("screening_instruments")
+}
+
+// One screening event. Nullable appointmentId — like VaccinationRecord, a
+// screening can be tied to a visit or entered from a returned paper form.
+model ScreeningAdministration {
+  id               String  @id @default(cuid())
+  patientId        String  @map("patient_id")
+  instrumentId     String  @map("instrument_id")
+  appointmentId    String? @map("appointment_id")
+  administeredById String  @map("administered_by_id")
+
+  scheduledAgeMonths Int      @map("scheduled_age_months") // 9 | 18 | 24 | 30
+  ageMonthsAtScreen  Float    @map("age_months_at_screen") // computed server-side, not client-trusted
+  administeredAt     DateTime @map("administered_at")
+
+  totalScore   Int?             @map("total_score")
+  domainScores Json?            @map("domain_scores") // { communication: 45, grossMotor: 30, ... }
+  outcome      ScreeningOutcome
+  concernNote  String?          @map("concern_note")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  patient        Patient             @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  instrument     ScreeningInstrument @relation(fields: [instrumentId], references: [id])
+  administeredBy User                @relation(fields: [administeredById], references: [id])
+  appointment    Appointment?        @relation(fields: [appointmentId], references: [id])
+  referral       ScreeningReferral?
+
+  // One record per instrument per scheduled age — a re-screen uses a new
+  // scheduledAgeMonths value (triggered screening) rather than overwriting this.
+  @@unique([patientId, instrumentId, scheduledAgeMonths])
+  @@index([patientId, administeredAt])
+  @@index([outcome])
+  @@map("screening_administrations")
+}
+
+// The loop-closing model. Schema ships now; referral creation/tracking
+// endpoints are a follow-up phase — see the screening implementation plan.
+model ScreeningReferral {
+  id               String         @id @default(cuid())
+  administrationId String         @unique @map("administration_id")
+  referredTo       String         @map("referred_to") // Early Intervention, audiology, developmental peds
+  referredAt       DateTime       @map("referred_at")
+  status           ReferralStatus @default(PENDING)
+  outcomeNote      String?        @map("outcome_note")
+  closedAt         DateTime?      @map("closed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  administration ScreeningAdministration @relation(fields: [administrationId], references: [id], onDelete: Cascade)
+
+  @@index([status, referredAt])
+  @@map("screening_referrals")
 }
 
 // ─────────────────────────────────────────────────────────

@@ -4,6 +4,7 @@ import { calculateAge } from '@peditrack/utils';
 
 import { PrismaService } from '../../prisma/prisma.service';
 import { VaccinationsService } from '../vaccinations/vaccinations.service';
+import { ScreeningsService } from '../screenings/screenings.service';
 
 /**
  * SEC-021 fix: cap the ?days parameter on getUpcoming() at 30 days.
@@ -45,6 +46,7 @@ export class DashboardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly vaccinations: VaccinationsService,
+    private readonly screenings: ScreeningsService,
   ) {}
 
   async getStats() {
@@ -59,6 +61,7 @@ export class DashboardService {
       completedToday,
       activePrescriptions,
       dueVaccines,
+      dueScreenings,
     ] = await Promise.all([
       this.prisma.patient.count({ where: { deletedAt: null, isActive: true } }),
       this.prisma.patient.count({ where: { deletedAt: null, createdAt: { gte: monthStart } } }),
@@ -74,6 +77,7 @@ export class DashboardService {
       }),
       this.prisma.prescription.count({ where: { status: 'ACTIVE' } }),
       this.vaccinations.dueSoon(30), // fixed 30-day window — already capped inside dueSoon()
+      this.screenings.dueSoon(30), // fixed 30-day window — already capped inside dueSoon()
     ]);
 
     return {
@@ -85,6 +89,8 @@ export class DashboardService {
       completedToday,
       vaccinesDueSoon: dueVaccines.filter((v) => !v.isOverdue).length,
       vaccinesOverdue: dueVaccines.filter((v) => v.isOverdue).length,
+      screeningsDueSoon: dueScreenings.filter((s) => !s.isOverdue).length,
+      screeningsOverdue: dueScreenings.filter((s) => s.isOverdue).length,
       activePrescriptions,
     };
   }

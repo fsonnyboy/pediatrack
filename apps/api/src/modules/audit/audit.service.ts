@@ -35,6 +35,8 @@ export type AuditEntity =
   | 'MedicalNote'
   | 'VaccinationRecord'
   | 'VitalSign'
+  | 'ScreeningAdministration'
+  | 'ScreeningReferral'
   | 'User';
 
 export interface AuditEventDto {

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Activity, Calendar, LayoutDashboard, Pill, Settings, Syringe, Users,
+  Activity, Calendar, ClipboardCheck, LayoutDashboard, Pill, Settings, Syringe, Users,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: '/patients',      label: 'Patients',     icon: Users },
   { href: '/appointments',  label: 'Appointments', icon: Calendar },
   { href: '/vaccinations',  label: 'Vaccinations', icon: Syringe },
+  { href: '/screenings',    label: 'Screening',    icon: ClipboardCheck },
   { href: '/prescriptions', label: 'Prescriptions', icon: Pill },
 ];
 

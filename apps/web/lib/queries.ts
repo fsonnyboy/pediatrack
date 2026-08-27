@@ -2,6 +2,8 @@ import { api } from './api-client';
 import type {
   Appointment, DashboardStats, Patient, Prescription,
   Vaccine, VaccinationRecord, AuthUser, LoginResponse,
+  ScreeningInstrument, ScreeningAdministration, DueScreening,
+  OpenReferral, UnaddressedScreening,
 } from '@peditrack/types';
 
 // ── Auth ────────────────────────────────────────────────
@@ -44,6 +46,7 @@ export const patientsApi = {
   prescriptions: (id: string) => api.get<Prescription[]>(`/patients/${id}/prescriptions`),
   growthChart: (id: string) => api.get(`/patients/${id}/growth-chart`),
   notes: (id: string) => api.get(`/patients/${id}/notes`),
+  screenings: (id: string) => api.get<ScreeningAdministration[]>(`/patients/${id}/screenings`),
 };
 
 // ── Appointments ────────────────────────────────────────
@@ -78,6 +81,21 @@ export const vaccinationsApi = {
   dueSoon: (days = 30) => api.get(`/vaccinations/due-soon?days=${days}`),
   schedule: (patientId: string) => api.get(`/vaccinations/schedule/${patientId}`),
   create: (data: unknown) => api.post('/vaccinations', data),
+};
+
+// ── Screenings ──────────────────────────────────────────
+export const screeningsApi = {
+  instruments: () => api.get<ScreeningInstrument[]>('/screening-instruments'),
+  list: (filters: Record<string, unknown> = {}) =>
+    api.paginated<ScreeningAdministration>(`/screenings${api.qs(filters)}`),
+  dueSoon: (days = 30) => api.get<DueScreening[]>(`/screenings/due-soon?days=${days}`),
+  create: (data: unknown) => api.post('/screenings', data),
+  openReferrals: () => api.get<OpenReferral[]>('/screenings/referrals/open'),
+  unaddressedReferrals: () => api.get<UnaddressedScreening[]>('/screenings/referrals/unaddressed'),
+  createReferral: (administrationId: string, data: unknown) =>
+    api.post(`/screenings/${administrationId}/referral`, data),
+  updateReferral: (referralId: string, data: unknown) =>
+    api.patch(`/screening-referrals/${referralId}`, data),
 };
 
 // ── Prescriptions ───────────────────────────────────────
