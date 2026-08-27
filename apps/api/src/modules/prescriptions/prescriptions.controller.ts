@@ -2,7 +2,9 @@ import { Body, Controller, Delete, Get, Param, Patch, Post, Query } from '@nestj
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 
 import { PrescriptionsService } from './prescriptions.service';
-import { CreatePrescriptionDto, UpdatePrescriptionStatusDto } from './dto/create-prescription.dto';
+import {
+  CreatePrescriptionDto, UpdatePrescriptionItemsDto, UpdatePrescriptionStatusDto,
+} from './dto/create-prescription.dto';
 import { QueryPrescriptionsDto } from './dto/query-prescriptions.dto';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -38,6 +40,14 @@ export class PrescriptionsController {
   @ApiOperation({ summary: 'Mark a prescription completed or cancelled' })
   updateStatus(@Param('id') id: string, @Body() dto: UpdatePrescriptionStatusDto) {
     return this.prescriptionsService.updateStatus(id, dto);
+  }
+
+  @Patch(':id/items')
+  @Roles('ADMIN', 'DOCTOR')
+  @ApiOperation({ summary: 'Replace the medicines on an active prescription and re-run safety checks' })
+  @ApiResponse({ status: 400, description: 'A revised medicine fails the allergy or dose check' })
+  updateItems(@Param('id') id: string, @Body() dto: UpdatePrescriptionItemsDto) {
+    return this.prescriptionsService.updateItems(id, dto);
   }
 
   @Delete(':id')

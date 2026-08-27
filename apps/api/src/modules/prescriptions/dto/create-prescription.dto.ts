@@ -86,3 +86,15 @@ export class UpdatePrescriptionStatusDto {
   @IsEnum(PrescriptionStatusEnum)
   status!: PrescriptionStatusEnum;
 }
+
+export class UpdatePrescriptionItemsDto {
+  @ApiProperty({
+    type: [CreatePrescriptionItemDto],
+    description:
+      'Replaces every medicine on this prescription. Re-runs the allergy and dose checks against ' +
+      "the patient's current data, so a weight recorded after the original prescription is used.",
+  })
+  @IsArray() @ArrayMinSize(1, { message: 'A prescription needs at least one medicine' })
+  @ValidateNested({ each: true }) @Type(() => CreatePrescriptionItemDto)
+  items!: CreatePrescriptionItemDto[];
+}

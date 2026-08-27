@@ -482,8 +482,20 @@ model PrescriptionItem {
 // this table — and, like the milestone checklists, it must be transcribed
 // from a real formulary and version-pinned rather than typed from memory.
 model MedicineDoseReference {
-  id          String @id @default(cuid())
-  genericName String @unique @map("generic_name")
+  id          String   @id @default(cuid())
+  genericName String   @map("generic_name")
+  // Alternate spellings and salt forms that should resolve to this row, e.g.
+  // ["amoxicillin trihydrate", "amoxil"] for a genericName of "amoxicillin".
+  aliases     String[] @default([])
+
+  // Null bounds mean "applies at any age" — used as the fallback row when no
+  // age-specific row covers the patient. A row with narrower (non-null)
+  // bounds wins over the fallback when both match. Neonatal ranges in
+  // particular differ sharply from those for older infants, so a single
+  // min/max per drug is not safe for the whole pediatric range.
+  ageMinMonths Int?    @map("age_min_months")
+  ageMaxMonths Int?    @map("age_max_months")
+  indication   String? // e.g. "otitis media" — null means "general"
 
   mgPerKgDayMin   Float  @map("mg_per_kg_day_min")
   mgPerKgDayMax   Float  @map("mg_per_kg_day_max")
@@ -499,6 +511,7 @@ model MedicineDoseReference {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([isActive])
+  @@index([genericName])
   @@map("medicine_dose_references")
 }
 
